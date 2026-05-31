@@ -65,7 +65,7 @@ if st.session_state.selected_country is None:
 
 else:
     # ===================== TELA 2: GERAÇÃO (quase igual ao original) =====================
-    st.title("🎙️ ElevenLabs SRT Dubber")
+    st.title("🎙️ ElevenLabs SRT Voice Generator")
     st.caption(f"Country: **{st.session_state.selected_country}** • Voice: **{st.session_state.selected_voice_name}**")
 
     if st.button("← Change Country"):
