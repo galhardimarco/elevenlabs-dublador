@@ -1,0 +1,5 @@
+streamlit
+pysrt
+numpy
+soundfile
+requests
