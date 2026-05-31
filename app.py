@@ -141,20 +141,32 @@ if uploaded_file and st.button("🚀 Generate Audio", type="primary", use_contai
                 audio_data = np.column_stack([audio_data, audio_data])
             audio_data = normalize_audio(audio_data)
 
+            # === AJUSTE DE VELOCIDADE ===
             start_ms = int(sub.start.ordinal)
             end_ms = int(sub.end.ordinal)
             available = end_ms - start_ms
             original_dur = int(len(audio_data) / sr * 1000)
 
-            if original_dur > available * 1.05:
+            if original_dur > available * 1.05:  # tolerância de 5%
                 speed = min(original_dur / available, 2.0)
+                
                 sped_path = f"sped_{task_id}_{i}.mp3"
                 apply_ffmpeg_speed(temp_audio, sped_path, speed)
+                
                 audio_data, sr = sf.read(sped_path)
                 if audio_data.ndim == 1:
                     audio_data = np.column_stack([audio_data, audio_data])
                 audio_data = normalize_audio(audio_data)
                 os.remove(sped_path)
+
+                # === AVISOS ===
+                if speed > 1.5:
+                    st.warning(f"⚠️ **ALERTA**: Segmento {i+1} acelerado em **{speed:.2f}x** (muito rápido)")
+                else:
+                    st.info(f"⚡ Segmento {i+1} acelerado em **{speed:.2f}x**")
+
+                status_text.text(f"🎤 {i+1}/{total} - Acelerado {speed:.2f}x → {text[:50]}...")
+            # =================================
 
             start_sample = int(start_ms / 1000.0 * sr)
             end_sample = start_sample + len(audio_data)
