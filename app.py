@@ -9,16 +9,40 @@ import time
 
 st.set_page_config(page_title="ElevenLabs Dublador", page_icon="🎙️", layout="wide")
 
-# ===================== CONFIG =====================
+# ===================== SEGURANÇA =====================
+def check_password():
+    """Proteção com senha"""
+    if "password_correct" not in st.session_state:
+        st.session_state.password_correct = False
+
+    if not st.session_state.password_correct:
+        st.title("🔐 Acesso Restrito")
+        st.markdown("**Esta ferramenta é privada.**")
+        
+        password = st.text_input("Digite a senha para continuar:", type="password")
+        
+        if st.button("Entrar", type="primary"):
+            if password == st.secrets.get("APP_PASSWORD", "senha_padrao"):
+                st.session_state.password_correct = True
+                st.rerun()
+            else:
+                st.error("❌ Senha incorreta!")
+        return False
+    return True
+
+# ===================== VERIFICAÇÃO DE SENHA =====================
+if not check_password():
+    st.stop()
+
+# ===================== CONFIGURAÇÕES =====================
 API_KEY = st.secrets["ELEVENLABS_API_KEY"]
 
 HEADERS = {"xi-api-key": API_KEY, "Content-Type": "application/json"}
 
-# ===================== VOZES PRÉ-DEFINIDAS =====================
+# ===================== VOZES =====================
 VOICES = {
     "Korean Young Gyu": "h5eZa8VFAq0EQ8E81dfL",
     "Estive New Brazil": "YU8EsJtXFMyKMxYtheDk",
-    # Adicione mais aqui no futuro
 }
 
 # ===================== FUNÇÕES =====================
@@ -54,7 +78,7 @@ def apply_ffmpeg_speed(input_path, output_path, speed):
     filters.append(f"atempo={speed:.5f}")
     filters.append("volume=1.2")
     
-    command = ["ffmpeg", "-y", "-i", input_path, "-filter: a", ",".join(filters), "-ac", "2", "-vn", output_path]
+    command = ["ffmpeg", "-y", "-i", input_path, "-filter:a", ",".join(filters), "-ac", "2", "-vn", output_path]
     subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def normalize_audio(data):
@@ -71,7 +95,7 @@ with col1:
     uploaded_file = st.file_uploader("Envie seu arquivo .srt", type=["srt"])
 
 with col2:
-    selected_voice_name = st.selectbox("Voz", options=list(VOICES.keys()))
+    selected_voice_name = st.selectbox("Escolha a Voz", options=list(VOICES.keys()))
     VOICE_ID = VOICES[selected_voice_name]
 
 st.subheader("⚙️ Ajustes da Voz")
@@ -100,20 +124,21 @@ if uploaded_file and st.button("🚀 Gerar Áudio", type="primary", use_containe
 
         for i, sub in enumerate(subtitles):
             text = sub.text.strip().replace("\n", " ")
-            if not text: continue
+            if not text: 
+                continue
 
-            status_text.text(f"Processando {i+1}/{total}: {text[:60]}...")
+            status_text.text(f"🎤 Processando {i+1}/{total}: {text[:60]}...")
 
             temp_audio = f"seg_{task_id}_{i}.mp3"
             success = generate_tts(text, temp_audio, VOICE_ID, stability, similarity)
-            if not success: continue
+            if not success: 
+                continue
 
             audio_data, sr = sf.read(temp_audio)
             if audio_data.ndim == 1:
                 audio_data = np.column_stack([audio_data, audio_data])
             audio_data = normalize_audio(audio_data)
 
-            # Ajuste de velocidade
             start_ms = int(sub.start.ordinal)
             end_ms = int(sub.end.ordinal)
             available = end_ms - start_ms
@@ -129,7 +154,6 @@ if uploaded_file and st.button("🚀 Gerar Áudio", type="primary", use_containe
                 audio_data = normalize_audio(audio_data)
                 os.remove(sped_path)
 
-            # Insere no áudio final
             start_sample = int(start_ms / 1000.0 * sr)
             end_sample = start_sample + len(audio_data)
 
@@ -155,13 +179,17 @@ if uploaded_file and st.button("🚀 Gerar Áudio", type="primary", use_containe
                 "📥 Baixar Áudio Final",
                 data=f,
                 file_name=uploaded_file.name.replace(".srt", f"_dublado_{selected_voice_name}.mp3"),
-                mime="audio/mpeg"
+                mime="audio/mpeg",
+                use_container_width=True
             )
 
     except Exception as e:
-        st.error(f"Erro: {e}")
+        st.error(f"Erro durante o processamento: {e}")
     finally:
+        # Limpeza de arquivos temporários
         for f in os.listdir():
             if task_id in f:
-                try: os.remove(f)
-                except: pass
+                try: 
+                    os.remove(f)
+                except: 
+                    pass
