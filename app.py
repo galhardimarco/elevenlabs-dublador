@@ -101,10 +101,10 @@ with col2:
 st.subheader("⚙️ Voice Settings")
 col_a, col_b = st.columns(2)
 with col_a:
-    stability = st.slider("Stability", 0.0, 1.0, 0.5, 0.05, 
+    stability = st.slider("Stability", 0.0, 1.0, 0.6, 0.05, 
                          help="Higher = more consistent voice")
 with col_b:
-    similarity = st.slider("Similarity Boost", 0.0, 1.0, 0.75, 0.05,
+    similarity = st.slider("Similarity Boost", 0.0, 1.0, 0.85, 0.05,
                          help="Higher = more similar to original voice")
 
 if uploaded_file and st.button("🚀 Generate Audio", type="primary", use_container_width=True):
