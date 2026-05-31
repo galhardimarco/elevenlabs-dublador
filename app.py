@@ -7,45 +7,45 @@ import pysrt
 import requests
 import time
 
-st.set_page_config(page_title="ElevenLabs Dublador", page_icon="🎙️", layout="wide")
+st.set_page_config(page_title="ElevenLabs Dubber", page_icon="🎙️", layout="wide")
 
-# ===================== SEGURANÇA =====================
+# ===================== SECURITY =====================
 def check_password():
-    """Proteção com senha"""
+    """Password protection"""
     if "password_correct" not in st.session_state:
         st.session_state.password_correct = False
 
     if not st.session_state.password_correct:
-        st.title("🔐 Acesso Restrito")
-        st.markdown("**Esta ferramenta é privada.**")
+        st.title("🔐 Restricted Access")
+        st.markdown("**This tool is private.**")
         
-        password = st.text_input("Digite a senha para continuar:", type="password")
+        password = st.text_input("Enter password to continue:", type="password")
         
-        if st.button("Entrar", type="primary"):
-            if password == st.secrets.get("APP_PASSWORD", "senha_padrao"):
+        if st.button("Login", type="primary"):
+            if password == st.secrets.get("APP_PASSWORD", "default_password"):
                 st.session_state.password_correct = True
                 st.rerun()
             else:
-                st.error("❌ Senha incorreta!")
+                st.error("❌ Incorrect password!")
         return False
     return True
 
-# ===================== VERIFICAÇÃO DE SENHA =====================
+# ===================== PASSWORD CHECK =====================
 if not check_password():
     st.stop()
 
-# ===================== CONFIGURAÇÕES =====================
+# ===================== CONFIG =====================
 API_KEY = st.secrets["ELEVENLABS_API_KEY"]
 
 HEADERS = {"xi-api-key": API_KEY, "Content-Type": "application/json"}
 
-# ===================== VOZES =====================
+# ===================== VOICES =====================
 VOICES = {
     "Korean Young Gyu": "h5eZa8VFAq0EQ8E81dfL",
     "Estive New Brazil": "YU8EsJtXFMyKMxYtheDk",
 }
 
-# ===================== FUNÇÕES =====================
+# ===================== FUNCTIONS =====================
 def generate_tts(text, output_path, voice_id, stability, similarity):
     data = {
         "text": text,
@@ -63,7 +63,7 @@ def generate_tts(text, output_path, voice_id, stability, similarity):
             f.write(response.content)
         return True
     else:
-        st.error(f"Erro ElevenLabs: {response.status_code}")
+        st.error(f"ElevenLabs Error: {response.status_code}")
         return False
 
 def apply_ffmpeg_speed(input_path, output_path, speed):
@@ -85,30 +85,32 @@ def normalize_audio(data):
     peak = np.max(np.abs(data))
     return data / peak * 0.95 if peak > 0 else data
 
-# ===================== INTERFACE =====================
-st.title("🎙️ ElevenLabs SRT Dublador")
-st.markdown("Transforme suas legendas em áudio com voz IA")
+# ===================== MAIN INTERFACE =====================
+st.title("🎙️ ElevenLabs SRT Dubber")
+st.markdown("Convert your subtitles into high-quality AI dubbed audio")
 
 col1, col2 = st.columns([3, 2])
 
 with col1:
-    uploaded_file = st.file_uploader("Envie seu arquivo .srt", type=["srt"])
+    uploaded_file = st.file_uploader("Upload .srt file", type=["srt"])
 
 with col2:
-    selected_voice_name = st.selectbox("Escolha a Voz", options=list(VOICES.keys()))
+    selected_voice_name = st.selectbox("Select Voice", options=list(VOICES.keys()))
     VOICE_ID = VOICES[selected_voice_name]
 
-st.subheader("⚙️ Ajustes da Voz")
+st.subheader("⚙️ Voice Settings")
 col_a, col_b = st.columns(2)
 with col_a:
-    stability = st.slider("Estabilidade", 0.0, 1.0, 0.5, 0.05)
+    stability = st.slider("Stability", 0.0, 1.0, 0.5, 0.05, 
+                         help="Higher = more consistent voice")
 with col_b:
-    similarity = st.slider("Similarity Boost", 0.0, 1.0, 0.75, 0.05)
+    similarity = st.slider("Similarity Boost", 0.0, 1.0, 0.75, 0.05,
+                         help="Higher = more similar to original voice")
 
-if uploaded_file and st.button("🚀 Gerar Áudio", type="primary", use_container_width=True):
+if uploaded_file and st.button("🚀 Generate Audio", type="primary", use_container_width=True):
     task_id = f"task_{int(time.time())}"
     
-    progress_bar = st.progress(0, text="Iniciando processamento...")
+    progress_bar = st.progress(0, text="Starting processing...")
     status_text = st.empty()
 
     try:
@@ -127,7 +129,7 @@ if uploaded_file and st.button("🚀 Gerar Áudio", type="primary", use_containe
             if not text: 
                 continue
 
-            status_text.text(f"🎤 Processando {i+1}/{total}: {text[:60]}...")
+            status_text.text(f"🎤 Processing {i+1}/{total}: {text[:60]}...")
 
             temp_audio = f"seg_{task_id}_{i}.mp3"
             success = generate_tts(text, temp_audio, VOICE_ID, stability, similarity)
@@ -172,21 +174,21 @@ if uploaded_file and st.button("🚀 Gerar Áudio", type="primary", use_containe
         output_path = f"final_{task_id}.mp3"
         sf.write(output_path, final_audio, sr)
 
-        st.success("✅ Áudio gerado com sucesso!")
+        st.success("✅ Audio generated successfully!")
 
         with open(output_path, "rb") as f:
             st.download_button(
-                "📥 Baixar Áudio Final",
+                "📥 Download Final Audio",
                 data=f,
-                file_name=uploaded_file.name.replace(".srt", f"_dublado_{selected_voice_name}.mp3"),
+                file_name=uploaded_file.name.replace(".srt", f"_dubbed_{selected_voice_name}.mp3"),
                 mime="audio/mpeg",
                 use_container_width=True
             )
 
     except Exception as e:
-        st.error(f"Erro durante o processamento: {e}")
+        st.error(f"Error during processing: {e}")
     finally:
-        # Limpeza de arquivos temporários
+        # Cleanup
         for f in os.listdir():
             if task_id in f:
                 try: 
