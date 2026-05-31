@@ -7,7 +7,7 @@ import pysrt
 import requests
 import time
 
-st.set_page_config(page_title="ElevenLabs SRT Dubber", page_icon="🎙️", layout="wide")
+st.set_page_config(page_title="ElevenLabs SRT Voice Generator", page_icon="🎙️", layout="wide")
 
 # ===================== SEGURANÇA (igual ao seu) =====================
 def check_password():
