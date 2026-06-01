@@ -32,6 +32,41 @@ def check_password():
 if not check_password():
     st.stop()
 
+# ===================== FUNÇÕES =====================
+def generate_tts(text, output_path, voice_id, stability, similarity):
+    data = {
+        "text": text,
+        "model_id": "eleven_v3",
+        "voice_settings": {"stability": stability, "similarity_boost": similarity}
+    }
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    response = requests.post(url, headers=HEADERS, json=data)
+    if response.status_code == 200:
+        with open(output_path, 'wb') as f:
+            f.write(response.content)
+        return True
+    else:
+        st.error(f"ElevenLabs Error: {response.status_code}")
+        return False
+
+def apply_ffmpeg_speed(input_path, output_path, speed):
+    speed = max(0.5, min(speed, 100))
+    filters = []
+    while speed > 2.0:
+        filters.append("atempo=2.0")
+        speed /= 2.0
+    while speed < 0.5:
+        filters.append("atempo=0.5")
+        speed *= 2.0
+    filters.append(f"atempo={speed:.5f}")
+    filters.append("volume=1.2")
+    command = ["ffmpeg", "-y", "-i", input_path, "-filter:a", ",".join(filters), "-ac", "2", "-vn", output_path]
+    subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+def normalize_audio(data):
+    peak = np.max(np.abs(data))
+    return data / peak * 0.95 if peak > 0 else data
+    
 # ===================== CONFIG =====================
 API_KEY = st.secrets["ELEVENLABS_API_KEY"]
 HEADERS = {"xi-api-key": API_KEY, "Content-Type": "application/json"}
@@ -181,37 +216,3 @@ else:
                     try: os.remove(f)
                     except: pass
 
-# ===================== FUNÇÕES =====================
-def generate_tts(text, output_path, voice_id, stability, similarity):
-    data = {
-        "text": text,
-        "model_id": "eleven_v3",
-        "voice_settings": {"stability": stability, "similarity_boost": similarity}
-    }
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-    response = requests.post(url, headers=HEADERS, json=data)
-    if response.status_code == 200:
-        with open(output_path, 'wb') as f:
-            f.write(response.content)
-        return True
-    else:
-        st.error(f"ElevenLabs Error: {response.status_code}")
-        return False
-
-def apply_ffmpeg_speed(input_path, output_path, speed):
-    speed = max(0.5, min(speed, 100))
-    filters = []
-    while speed > 2.0:
-        filters.append("atempo=2.0")
-        speed /= 2.0
-    while speed < 0.5:
-        filters.append("atempo=0.5")
-        speed *= 2.0
-    filters.append(f"atempo={speed:.5f}")
-    filters.append("volume=1.2")
-    command = ["ffmpeg", "-y", "-i", input_path, "-filter:a", ",".join(filters), "-ac", "2", "-vn", output_path]
-    subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-def normalize_audio(data):
-    peak = np.max(np.abs(data))
-    return data / peak * 0.95 if peak > 0 else data
