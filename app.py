@@ -38,8 +38,10 @@ HEADERS = {"xi-api-key": API_KEY, "Content-Type": "application/json"}
 
 # ===================== MAPA DE PAÍSES =====================
 COUNTRY_VOICES = {
-    "Brazil 🇧🇷": {"name": "Estive New Brazil", "id": "YU8EsJtXFMyKMxYtheDk"},
-    "Korea 🇰🇷": {"name": "Korean Young Gyu", "id": "h5eZa8VFAq0EQ8E81dfL"},
+    "Brazil": {"name": "Brazil Estive New", "id": "YU8EsJtXFMyKMxYtheDk"},
+    "Korea": {"name": "Korean Young Gyu", "id": "h5eZa8VFAq0EQ8E81dfL"},
+    "Japanese": {"name": "Japanese Yuma Uchida", "id": "EHMH9cyd1z3rXm4z0Jja"},
+    "Filipino": {"name": "Filipino Pocholo Gonzales", "id": "VCGhAh0uUPumdTXQNdzQ"},
 }
 
 # ===================== ESTADO =====================
