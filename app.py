@@ -6,19 +6,16 @@ import soundfile as sf
 import pysrt
 import requests
 import time
+import queue
+import uuid
+from datetime import datetime
 
-st.set_page_config(
-    page_title="ElevenLabs SRT Voice Generator",
-    page_icon="🎙️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="ElevenLabs SRT Voice Generator", page_icon="🎙️", layout="wide")
 
-# ===================== CONFIG (moved to top for clarity) =====================
+# ===================== CONFIG =====================
 API_KEY = st.secrets["ELEVENLABS_API_KEY"]
 HEADERS = {"xi-api-key": API_KEY, "Content-Type": "application/json"}
 
-# ===================== MAPA DE VOZES =====================
 COUNTRY_VOICES = {
     "Brazil 🇧🇷": {"name": "Brazil Estive New", "id": "YU8EsJtXFMyKMxYtheDk"},
     "Korea 🇰🇷": {"name": "Korean Young Gyu", "id": "h5eZa8VFAq0EQ8E81dfL"},
@@ -26,34 +23,38 @@ COUNTRY_VOICES = {
     "Filipino 🇵🇭": {"name": "Filipino Pocholo Gonzales", "id": "VCGhAh0uUPumdTXQNdzQ"},
 }
 
-# ===================== FUNÇÕES =====================
-def generate_tts(text, output_path, voice_id, stability, similarity, model_id="eleven_v3"):
-    """Gera áudio TTS via ElevenLabs"""
-    data = {
-        "text": text,
-        "model_id": model_id,
-        "voice_settings": {
-            "stability": stability,
-            "similarity_boost": similarity
-        }
-    }
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-    try:
-        response = requests.post(url, headers=HEADERS, json=data, timeout=60)
-        if response.status_code == 200:
-            with open(output_path, 'wb') as f:
-                f.write(response.content)
-            return True
-        else:
-            st.error(f"ElevenLabs Error {response.status_code}: {response.text[:200]}")
-            return False
-    except Exception as e:
-        st.error(f"Request failed: {e}")
-        return False
+# ===================== QUEUE =====================
+if "queue" not in st.session_state:
+    st.session_state.queue = []
+if "tasks" not in st.session_state:
+    st.session_state.tasks = {}
 
+def add_to_queue(task_id):
+    if task_id not in st.session_state.queue:
+        st.session_state.queue.append(task_id)
+
+def get_position(task_id):
+    try:
+        return st.session_state.queue.index(task_id)
+    except:
+        return -1
+
+def remove_from_queue(task_id):
+    if task_id in st.session_state.queue:
+        st.session_state.queue.remove(task_id)
+
+# ===================== PROCESSING =====================
+def generate_tts(text, output_path, voice_id, stability, similarity, model_id):
+    data = {"text": text, "model_id": model_id, "voice_settings": {"stability": stability, "similarity_boost": similarity}}
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    resp = requests.post(url, headers=HEADERS, json=data, timeout=90)
+    if resp.status_code == 200:
+        with open(output_path, 'wb') as f:
+            f.write(resp.content)
+        return True
+    raise Exception(f"ElevenLabs error {resp.status_code}")
 
 def apply_ffmpeg_speed(input_path, output_path, speed):
-    """Acelera áudio mantendo tom (pitch)"""
     speed = max(0.5, min(speed, 100))
     filters = []
     while speed > 2.0:
@@ -64,99 +65,133 @@ def apply_ffmpeg_speed(input_path, output_path, speed):
         speed *= 2.0
     filters.append(f"atempo={speed:.5f}")
     filters.append("volume=1.2")
-
-    command = [
-        "ffmpeg", "-y", "-i", input_path,
-        "-filter:a", ",".join(filters),
-        "-ac", "2", "-vn", output_path
-    ]
-    subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
+    subprocess.run(["ffmpeg", "-y", "-i", input_path, "-filter:a", ",".join(filters), "-ac", "2", "-vn", output_path],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def normalize_audio(data):
-    """Normaliza pico de áudio para -0.5 dBFS approx"""
     peak = np.max(np.abs(data))
     return data / peak * 0.95 if peak > 0 else data
 
+def process_job(task_id):
+    job = st.session_state.tasks[task_id]
+    file_bytes = job["file_bytes"]
+    voice_id = job["voice_id"]
+    stability = job["stability"]
+    similarity = job["similarity"]
+    model_id = job["model_id"]
+    force_fit = job["force_fit"]
 
-@st.cache_data(ttl=300, show_spinner=False)
-def get_subscription_info():
-    """Busca uso de caracteres da conta ElevenLabs"""
-    try:
-        resp = requests.get(
-            "https://api.elevenlabs.io/v1/user/subscription",
-            headers=HEADERS,
-            timeout=10
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            used = data.get("character_count", 0)
-            limit = data.get("character_limit", 0)
-            tier = data.get("tier", "Unknown")
-            remaining = max(0, limit - used) if limit > 0 else 0
-            pct = round((used / limit * 100), 1) if limit > 0 else 0
-            return {
-                "tier": tier,
-                "used": used,
-                "limit": limit,
-                "remaining": remaining,
-                "pct": pct,
-                "error": None
-            }
-        else:
-            return {"error": f"API returned {resp.status_code}"}
-    except Exception as e:
-        return {"error": str(e)}
+    temp_srt = f"temp_{task_id}.srt"
+    with open(temp_srt, "wb") as f:
+        f.write(file_bytes)
 
+    subtitles = pysrt.open(temp_srt, encoding='utf-8')
+    valid_subs = [s for s in subtitles if s.text.strip()]
+    total = len(valid_subs)
+
+    final_audio = np.zeros((0, 2), dtype=np.float32)
+    sr = 44100
+    sped_up = []
+    truncated = []
+
+    progress = st.progress(0, text="Starting...")
+
+    for idx, sub in enumerate(valid_subs):
+        text = sub.text.strip().replace("\n", " ")
+        if not text: continue
+
+        progress.progress((idx + 1) / total, text=f"Processing segment {idx+1}/{total}...")
+
+        temp_audio = f"seg_{task_id}_{idx}.mp3"
+        generate_tts(text, temp_audio, voice_id, stability, similarity, model_id)
+
+        audio_data, sr = sf.read(temp_audio)
+        if audio_data.ndim == 1:
+            audio_data = np.column_stack([audio_data, audio_data])
+        audio_data = normalize_audio(audio_data)
+
+        start_ms = int(sub.start.ordinal)
+        end_ms = int(sub.end.ordinal)
+        available = end_ms - start_ms
+        original_dur = int(len(audio_data) / sr * 1000)
+
+        speed_used = 1.0
+        if original_dur > available * 1.05:
+            speed = original_dur / available
+            speed_used = min(speed, 2.0)
+
+            sped_path = f"sped_{task_id}_{idx}.mp3"
+            apply_ffmpeg_speed(temp_audio, sped_path, speed_used)
+            audio_data, sr = sf.read(sped_path)
+            if audio_data.ndim == 1:
+                audio_data = np.column_stack([audio_data, audio_data])
+            audio_data = normalize_audio(audio_data)
+            os.remove(sped_path)
+
+            new_dur = int(len(audio_data) / sr * 1000)
+            if force_fit and new_dur > available + 50:
+                max_samples = int(available / 1000.0 * sr)
+                audio_data = audio_data[:max_samples]
+                truncated.append((idx + 1, new_dur - available))
+            elif speed_used > 1.25:
+                sped_up.append((idx + 1, speed_used))
+
+        start_sample = int(start_ms / 1000.0 * sr)
+        end_sample = start_sample + len(audio_data)
+        if end_sample > len(final_audio):
+            new_audio = np.zeros((end_sample + 2000, 2), dtype=np.float32)
+            new_audio[:len(final_audio)] = final_audio
+            final_audio = new_audio
+        final_audio[start_sample:end_sample] = audio_data
+
+        if os.path.exists(temp_audio):
+            os.remove(temp_audio)
+
+    output_path = f"final_{task_id}.mp3"
+    sf.write(output_path, final_audio, sr)
+    os.remove(temp_srt)
+
+    st.session_state.tasks[task_id]["status"] = "done"
+    st.session_state.tasks[task_id]["result_path"] = output_path
+    st.session_state.tasks[task_id]["filename"] = job["filename"].replace(".srt", "_dubbed.mp3")
+    st.session_state.tasks[task_id]["sped_up"] = sped_up
+    st.session_state.tasks[task_id]["truncated"] = truncated
+    st.session_state.tasks[task_id]["total_segments"] = total
+
+    remove_from_queue(task_id)
 
 # ===================== SEGURANÇA =====================
 def check_password():
     if "password_correct" not in st.session_state:
         st.session_state.password_correct = False
-
     if not st.session_state.password_correct:
         st.title("🔐 Restricted Access")
-        st.markdown("**This tool is private.** Please enter the password to continue.")
-        
-        password = st.text_input("Password", type="password", key="pwd_input")
-        
+        pwd = st.text_input("Password", type="password")
         if st.button("Login", type="primary", use_container_width=True):
-            if password == st.secrets.get("APP_PASSWORD", "default_password"):
+            if pwd == st.secrets.get("APP_PASSWORD", "default_password"):
                 st.session_state.password_correct = True
                 st.rerun()
             else:
-                st.error("❌ Incorrect password. Please try again.")
+                st.error("❌ Incorrect password")
         st.stop()
     return True
-
 
 if not check_password():
     st.stop()
 
-# ===================== ESTADO DA SESSÃO =====================
+# ===================== ESTADO =====================
+if "my_task_id" not in st.session_state:
+    st.session_state.my_task_id = None
 if "selected_country" not in st.session_state:
     st.session_state.selected_country = None
-if "selected_voice_name" not in st.session_state:
-    st.session_state.selected_voice_name = None
-if "selected_voice_id" not in st.session_state:
-    st.session_state.selected_voice_id = None
 
-# ===================== TELA 1: ESCOLHA DO PAÍS / VOZ =====================
+# ===================== TELA 1: VOZ =====================
 if st.session_state.selected_country is None:
     st.title("🌍 ElevenLabs SRT Voice Generator")
-    st.markdown("### Select your country / voice to get started")
+    st.markdown("### Select your voice / language")
 
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        country = st.selectbox(
-            "Choose voice / language",
-            options=list(COUNTRY_VOICES.keys()),
-            index=0,
-            help="Each option uses a high-quality ElevenLabs voice optimized for that language/region."
-        )
-
-    with col2:
-        st.info("**Recommended for Brazilian Portuguese content:** Brazil 🇧🇷 voice")
+    country = st.selectbox("Choose voice", options=list(COUNTRY_VOICES.keys()), index=0)
+    st.info("**Recommended for Brazilian Portuguese content:** Brazil voice")
 
     if st.button("Continue →", type="primary", use_container_width=True):
         st.session_state.selected_country = country
@@ -165,299 +200,180 @@ if st.session_state.selected_country is None:
         st.rerun()
 
 else:
-    # ===================== TELA 2: GERAÇÃO PRINCIPAL =====================
+    # ===================== TELA 2 - UI COMO NA IMAGEM =====================
     st.title("🎙️ ElevenLabs SRT Voice Generator")
-    st.caption(f"**{st.session_state.selected_country}** • {st.session_state.selected_voice_name}")
+    st.caption(f"{st.session_state.selected_country} • {st.session_state.selected_voice_name}")
 
-    # Botão para trocar de voz/país
-    if st.button("← Change Voice / Country", type="secondary"):
+    if st.button("← Change Voice / Country"):
         st.session_state.selected_country = None
         st.rerun()
 
-    # ===================== SIDEBAR: CRÉDITOS + CONFIG =====================
+    # SIDEBAR
     with st.sidebar:
-        st.header("📊 ElevenLabs Account")
-        sub_info = get_subscription_info()
-        
-        if sub_info.get("error"):
-            st.error(f"Could not load account info: {sub_info['error']}")
-            if st.button("🔄 Retry"):
-                st.cache_data.clear()
-                st.rerun()
-        else:
-            st.metric("Current Plan", sub_info["tier"])
-            
-            cols = st.columns(2)
-            cols[0].metric("Characters Used", f"{sub_info['used']:,}")
-            cols[1].metric("Remaining", f"{sub_info['remaining']:,}")
-            
-            st.progress(sub_info["pct"] / 100.0, text=f"{sub_info['pct']}% of monthly quota used")
-            
-            if sub_info["pct"] > 85:
-                st.error("⚠️ **Quota almost exhausted!** Consider upgrading or waiting for reset.")
-            elif sub_info["pct"] > 70:
-                st.warning("⚠️ Quota running low. Monitor usage.")
-            else:
-                st.success("✅ Good quota balance")
+        st.header("ElevenLabs Account")
+        try:
+            resp = requests.get("https://api.elevenlabs.io/v1/user/subscription", headers=HEADERS, timeout=8)
+            if resp.status_code == 200:
+                d = resp.json()
+                used = d.get("character_count", 0)
+                limit = d.get("character_limit", 0)
+                tier = d.get("tier", "creator")
+                remaining = max(0, limit - used)
+                pct = (used / limit * 100) if limit > 0 else 0
 
-            st.caption("Data refreshes every 5 minutes. Use 'Rerun' button above to force refresh.")
+                st.write(f"**Current Plan**  \n{tier}")
+                c1, c2 = st.columns(2)
+                c1.metric("Characters Used", f"{used:,}")
+                c2.metric("Remaining", f"{remaining:,}")
+                st.progress(pct / 100, text=f"{pct:.1f}% of monthly quota used")
+
+                if pct < 70:
+                    st.success("Good quota balance")
+                elif pct < 85:
+                    st.warning("Quota running low")
+                else:
+                    st.error("Quota almost exhausted")
+        except:
+            pass
 
         st.divider()
         st.header("⚙️ Generation Settings")
-        
-        force_fit = st.checkbox(
-            "Force segments to fit timing (truncate if needed)",
-            value=True,
-            help="Only enable this if you want strict subtitle timing. When enabled and even 2x speed is not enough, the end of the sentence will be cut off. For Bible teaching, it's often better to leave it unchecked and adjust SRT timing manually if needed."
-        )
-        
-        model_id = st.selectbox(
-            "ElevenLabs Model",
-            options=["eleven_v3", "eleven_turbo_v2_5"],
-            index=0,
-            help="eleven_v3 = highest quality (slower, more expensive). eleven_turbo_v2_5 = faster & cheaper for drafts."
-        )
+        force_fit = st.checkbox("Force segments to fit timing (truncate if needed)", value=False)
+        model_id = st.selectbox("ElevenLabs Model", ["eleven_v3", "eleven_turbo_v2_5"], index=0)
 
-    # ===================== ÁREA PRINCIPAL =====================
-    col_upload, col_info = st.columns([3, 2])
-
+    # UPLOAD + TIP
+    col_upload, col_tip = st.columns([3, 2])
     with col_upload:
-        uploaded_file = st.file_uploader(
-            "📁 Upload your .srt file",
-            type=["srt"],
-            help="Upload the subtitle file exported from your video editor or transcription tool."
-        )
+        uploaded_file = st.file_uploader("📁 Upload your .srt file", type=["srt"])
+    with col_tip:
+        st.info("💡 Tip: For best results with Bible teaching videos, use **Stability 0.55-0.65** and **Similarity 0.80-0.90** for consistent, trustworthy narration voice.")
 
-    with col_info:
-        st.info("**Tip:** For best results with Bible teaching videos, use **Stability 0.55-0.65** and **Similarity 0.80-0.90** for consistent, trustworthy narration voice.")
-
-    # Configurações de voz (sliders)
+    # VOICE QUALITY SETTINGS
     st.subheader("🎛️ Voice Quality Settings")
-    col_stab, col_sim = st.columns(2)
-    
-    with col_stab:
-        stability = st.slider(
-            "Stability",
-            min_value=0.0, max_value=1.0, value=0.60, step=0.05,
-            help="Higher = more consistent voice (recommended for teaching). Lower = more expressive/emotional."
-        )
-    with col_sim:
-        similarity = st.slider(
-            "Similarity Boost",
-            min_value=0.0, max_value=1.0, value=0.85, step=0.05,
-            help="Higher = closer to the original voice timbre. Good for brand consistency."
-        )
+    col1, col2 = st.columns(2)
+    with col1:
+        stability = st.slider("Stability", 0.0, 1.0, 0.60, 0.05, help="Higher = more consistent voice")
+    with col2:
+        similarity = st.slider("Similarity Boost", 0.0, 1.0, 0.85, 0.05, help="Higher = closer to original voice")
 
-    # ===================== PRÉVIA E GERAÇÃO =====================
+    # SRT PREVIEW (igual ao original)
     if uploaded_file:
-        # Ler SRT para mostrar preview e calcular caracteres
         try:
-            temp_srt_path = f"temp_preview_{int(time.time())}.srt"
-            with open(temp_srt_path, "wb") as f:
+            tmp = f"preview_{int(time.time())}.srt"
+            with open(tmp, "wb") as f:
                 f.write(uploaded_file.getbuffer())
-            
-            subtitles = pysrt.open(temp_srt_path, encoding='utf-8')
-            valid_subs = [s for s in subtitles if s.text.strip()]
-            total_chars = sum(len(s.text.strip()) for s in valid_subs)
-            total_segments = len(valid_subs)
-            
-            # Preview
-            with st.expander("📋 SRT Preview & Stats", expanded=False):
-                st.write(f"**Total segments:** {total_segments}")
-                st.write(f"**Total characters:** {total_chars:,}")
-                if total_chars > 0:
-                    est_cost = total_chars / 1000 * 0.10
-                    st.write(f"**Estimated cost (eleven_v3):** ~${est_cost:.2f} USD")
-                st.caption("First 5 segments:")
-                for i, sub in enumerate(valid_subs[:5]):
-                    st.text(f"[{i+1}] {sub.text[:80]}{'...' if len(sub.text) > 80 else ''}")
-            
-            os.remove(temp_srt_path)
+            subs = pysrt.open(tmp, encoding='utf-8')
+            valid = [s for s in subs if s.text.strip()]
+            chars = sum(len(s.text.strip()) for s in valid)
 
-        except Exception as e:
-            st.error(f"Error reading SRT: {e}")
-            st.stop()
+            with st.expander("SRT Preview & Stats"):
+                st.write(f"**Total segments:** {len(valid)}")
+                st.write(f"**Total characters:** {chars:,}")
+                st.write(f"**Estimated cost (eleven_v3):** ~${chars/1000 * 0.10:.2f} USD")
+                st.write("**First 5 segments:**")
+                for i, s in enumerate(valid[:5]):
+                    st.write(f"[{i+1}] {s.text.strip()[:80]}{'...' if len(s.text.strip()) > 80 else ''}")
+            os.remove(tmp)
+        except:
+            pass
 
-        # Botão de gerar
-        if st.button("🚀 Generate Dubbed Audio", type="primary", use_container_width=True):
-            task_id = f"task_{int(time.time())}"
-            progress_bar = st.progress(0, text="Starting processing...")
-            status_text = st.empty()
+    # ===================== GERAÇÃO =====================
+    if st.session_state.my_task_id is None:
+        if uploaded_file and st.button("Generate Dubbed Audio", type="primary", use_container_width=True):
+            task_id = str(uuid.uuid4())[:8]
+            st.session_state.tasks[task_id] = {
+                "status": "queued",
+                "file_bytes": uploaded_file.getbuffer().tobytes(),
+                "filename": uploaded_file.name,
+                "voice_id": st.session_state.selected_voice_id,
+                "stability": stability,
+                "similarity": similarity,
+                "model_id": model_id,
+                "force_fit": force_fit,
+            }
+            add_to_queue(task_id)
+            st.session_state.my_task_id = task_id
+            st.rerun()
 
-            try:
-                # Salvar SRT temporário
-                temp_srt = f"temp_{task_id}.srt"
-                with open(temp_srt, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+    else:
+        task_id = st.session_state.my_task_id
+        task = st.session_state.tasks.get(task_id, {})
+        pos = get_position(task_id)
 
-                subtitles = pysrt.open(temp_srt, encoding='utf-8')
-                valid_subs = [s for s in subtitles if s.text.strip()]
-                total = len(valid_subs)
+        if task.get("status") == "queued":
+            if pos == 0:
+                st.warning("It's your turn! Processing now...")
+                with st.spinner("Generating audio... Please wait."):
+                    try:
+                        process_job(task_id)
+                        st.rerun()
+                    except Exception as e:
+                        st.session_state.tasks[task_id]["status"] = "error"
+                        st.session_state.tasks[task_id]["error"] = str(e)
+                        st.rerun()
+            else:
+                st.info(f"You are in position **#{pos + 1}** in the queue.")
+                if st.button("Refresh status"):
+                    st.rerun()
 
-                final_audio = np.zeros((0, 2), dtype=np.float32)
-                sr = 44100
-                VOICE_ID = st.session_state.selected_voice_id
+        elif task.get("status") == "done":
+            st.success("Audio generated successfully!")
 
-                # === ESTATÍSTICAS PARA O RESUMO FINAL ===
-                sped_up_segments = []      # lista de (número, velocidade)
-                truncated_segments = []    # lista de (número, ms_cortados)
-
-                for idx, sub in enumerate(valid_subs):
-                    text = sub.text.strip().replace("\n", " ")
-                    if not text:
-                        continue
-
-                    progress = (idx + 1) / total
-                    status_text.text(f"🎤 Processing segment {idx+1}/{total} — {text[:55]}...")
-                    progress_bar.progress(progress)
-
-                    temp_audio = f"seg_{task_id}_{idx}.mp3"
-                    success = generate_tts(text, temp_audio, VOICE_ID, stability, similarity, model_id)
-                    if not success:
-                        continue
-
-                    # Carregar áudio gerado
-                    audio_data, sr = sf.read(temp_audio)
-                    if audio_data.ndim == 1:
-                        audio_data = np.column_stack([audio_data, audio_data])
-                    audio_data = normalize_audio(audio_data)
-
-                    # === LÓGICA DE TIMING ===
-                    start_ms = int(sub.start.ordinal)
-                    end_ms = int(sub.end.ordinal)
-                    available = end_ms - start_ms
-                    original_dur = int(len(audio_data) / sr * 1000)
-
-                    do_truncate = False
-                    speed_used = 1.0
-                    truncated_amount_ms = 0
-
-                    if original_dur > available * 1.05:
-                        speed = original_dur / available
-                        speed_used = min(speed, 2.0)
-
-                        # Aplicar aceleração
-                        sped_path = f"sped_{task_id}_{idx}.mp3"
-                        apply_ffmpeg_speed(temp_audio, sped_path, speed_used)
-                        
-                        audio_data, sr = sf.read(sped_path)
-                        if audio_data.ndim == 1:
-                            audio_data = np.column_stack([audio_data, audio_data])
-                        audio_data = normalize_audio(audio_data)
-                        os.remove(sped_path)
-
-                        new_dur = int(len(audio_data) / sr * 1000)
-
-                        # Truncar apenas se o usuário ativou "force_fit" E ainda não coube (com tolerância de 50ms)
-                        if force_fit and new_dur > available + 50:
-                            max_samples = int(available / 1000.0 * sr)
-                            truncated_amount_ms = new_dur - available
-                            audio_data = audio_data[:max_samples]
-                            do_truncate = True
-                            truncated_segments.append((idx + 1, truncated_amount_ms))
-
-                        # Registrar para o resumo final
-                        if do_truncate:
-                            pass  # já foi adicionado acima
-                        elif speed_used > 1.5:
-                            sped_up_segments.append((idx + 1, speed_used))
-                        elif speed_used > 1.25:
-                            sped_up_segments.append((idx + 1, speed_used))
-
-                    # Inserir no áudio final no tempo correto da legenda
-                    start_sample = int(start_ms / 1000.0 * sr)
-                    end_sample = start_sample + len(audio_data)
-
-                    # Garantir que o buffer final seja grande o suficiente
-                    if end_sample > len(final_audio):
-                        new_len = end_sample + 1000  # margem
-                        new_audio = np.zeros((new_len, 2), dtype=np.float32)
-                        new_audio[:len(final_audio)] = final_audio
-                        final_audio = new_audio
-
-                    final_audio[start_sample:end_sample] = audio_data
-
-                    # Limpar temporários do segmento
-                    if os.path.exists(temp_audio):
-                        os.remove(temp_audio)
-
-                # Salvar arquivo final
-                output_path = f"final_{task_id}.mp3"
-                sf.write(output_path, final_audio, sr)
-
-                progress_bar.progress(1.0)
-                status_text.empty()
-                st.success("✅ Audio generated successfully!")
-
-                # ===================== RESUMO FINAL =====================
-                with st.container(border=True):
-                    st.subheader("📋 Processing Summary")
-
-                    total_sped = len(sped_up_segments)
-                    total_truncated = len(truncated_segments)
-
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("Total Segments", total)
-                    col2.metric("Needed Speed-up (>1.25x)", total_sped)
-                    col3.metric("Truncated", total_truncated)
-
-                    if total_truncated > 0 or total_sped > 0:
-                        st.markdown("**Segments that needed attention:**")
-
-                        # Mostrar segmentos truncados
-                        if total_truncated > 0:
-                            trunc_text = ", ".join([f"**{num}** (cut {ms}ms)" for num, ms in truncated_segments])
-                            st.markdown(f"- Truncated: {trunc_text}")
-
-                        # Mostrar todos os segmentos que precisaram de aceleração
-                        if total_sped > 0:
-                            sped_text = ", ".join([f"**{num}** ({spd:.2f}x)" for num, spd in sped_up_segments])
-                            st.markdown(f"- Sped up: {sped_text}")
-
-                        st.caption("💡 Tip: For important teaching content, consider adjusting the original SRT timing instead of relying heavily on speed-up or truncation.")
-                    else:
-                        st.success("All segments fit well with minimal or no speed adjustment. Great job on the SRT timing!")
-
-                # Botão de download (bem visível depois do resumo)
-                with open(output_path, "rb") as f:
+            result_path = task.get("result_path")
+            if result_path and os.path.exists(result_path):
+                with open(result_path, "rb") as f:
                     st.download_button(
-                        label="📥 Download Final Dubbed Audio (.mp3)",
+                        "Download Final Dubbed Audio",
                         data=f,
-                        file_name=uploaded_file.name.replace(".srt", f"_dubbed_{st.session_state.selected_voice_name.replace(' ', '_')}.mp3"),
+                        file_name=task.get("filename", "dubbed.mp3"),
                         mime="audio/mpeg",
                         use_container_width=True,
                         type="primary"
                     )
 
-                st.balloons()
+            with st.expander("Processing Summary", expanded=True):
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Total Segments", task.get("total_segments", 0))
+                c2.metric("Needed Speed-up", len(task.get("sped_up", [])))
+                c3.metric("Truncated", len(task.get("truncated", [])))
 
-            except Exception as e:
-                st.error(f"❌ Unexpected error during processing: {e}")
-                st.exception(e)
-            finally:
-                # Limpeza robusta de arquivos temporários
-                for f_name in os.listdir():
-                    if f_name.startswith(("temp_", "seg_", "sped_", "final_")) and task_id in f_name:
-                        try:
-                            os.remove(f_name)
-                        except:
-                            pass
+                if task.get("truncated"):
+                    st.write("**Truncated:**", ", ".join([f"{n} (cut {m}ms)" for n, m in task["truncated"]]))
+                if task.get("sped_up"):
+                    st.write("**Sped up:**", ", ".join([f"{n} ({s:.2f}x)" for n, s in task["sped_up"]]))
 
-    else:
-        st.info("👆 Upload an SRT file above to begin generation.")
+            if st.button("Process another file"):
+                if task_id in st.session_state.tasks:
+                    del st.session_state.tasks[task_id]
+                remove_from_queue(task_id)
+                st.session_state.my_task_id = None
+                st.rerun()
 
-    # Rodapé / instruções
-    st.divider()
-    with st.expander("ℹ️ How to use this tool (for non-technical users)"):
+        elif task.get("status") == "error":
+            st.error(f"Error: {task.get('error')}")
+            if st.button("Try again"):
+                if task_id in st.session_state.tasks:
+                    del st.session_state.tasks[task_id]
+                remove_from_queue(task_id)
+                st.session_state.my_task_id = None
+                st.rerun()
+
+        if st.button("Cancel"):
+            if task_id in st.session_state.tasks:
+                del st.session_state.tasks[task_id]
+            remove_from_queue(task_id)
+            st.session_state.my_task_id = None
+            st.rerun()
+
+    # INSTRUÇÕES
+    with st.expander("How to use this tool (for non-technical users)"):
         st.markdown("""
-        1. **Select your voice** (country) on the first screen.
-        2. **Upload** the .srt file from your video project.
-        3. Adjust **Stability** and **Similarity** if needed (defaults are good for teaching videos).
-        4. Check **"Force segments to fit timing"** (recommended for slide sync).
-        5. Click **Generate**.
-        6. Download the final .mp3 and import it into your video editor aligned with the subtitles.
-
-        **Tip for Bible videos:** Keep Stability around 0.55-0.65 and Similarity 0.80-0.90 so the voice sounds calm, consistent and trustworthy.
+        1. Select your voice on the first screen.
+        2. Upload your .srt file.
+        3. Adjust Stability and Similarity if needed (defaults are good).
+        4. Click **Generate Dubbed Audio**.
+        5. If there is a queue, wait for your turn.
+        6. Download the final audio when ready.
         """)
 
     st.caption("Made with ❤️ for faithful content creators • Powered by ElevenLabs + Streamlit")
