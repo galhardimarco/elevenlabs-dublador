@@ -409,11 +409,10 @@ else:
                             trunc_text = ", ".join([f"**{num}** (cut {ms}ms)" for num, ms in truncated_segments])
                             st.markdown(f"- Truncated: {trunc_text}")
 
-                        # Mostrar segmentos acelerados acima de 1.5x
-                        high_speed = [(num, spd) for num, spd in sped_up_segments if spd > 1.5]
-                        if high_speed:
-                            high_text = ", ".join([f"**{num}** ({spd:.2f}x)" for num, spd in high_speed])
-                            st.markdown(f"- Sped up > 1.5x: {high_text}")
+                        # Mostrar todos os segmentos que precisaram de aceleração
+                        if total_sped > 0:
+                            sped_text = ", ".join([f"**{num}** ({spd:.2f}x)" for num, spd in sped_up_segments])
+                            st.markdown(f"- Sped up: {sped_text}")
 
                         st.caption("💡 Tip: For important teaching content, consider adjusting the original SRT timing instead of relying heavily on speed-up or truncation.")
                     else:
