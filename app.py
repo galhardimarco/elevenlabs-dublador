@@ -348,17 +348,17 @@ else:
 
                         new_dur = int(len(audio_data) / sr * 1000)
 
-                        # Truncar apenas se o usuário ativou "force_fit" E ainda não coube
-                        if force_fit and new_dur > available:
+                        # Truncar apenas se o usuário ativou "force_fit" E ainda não coube (com tolerância de 50ms)
+                        if force_fit and new_dur > available + 50:
                             max_samples = int(available / 1000.0 * sr)
                             truncated_amount_ms = new_dur - available
                             audio_data = audio_data[:max_samples]
                             do_truncate = True
                             truncated_segments.append((idx + 1, truncated_amount_ms))
 
-                        # Registrar para o resumo final (sem mostrar mensagens ao vivo para não poluir a tela)
-                        if do_truncate and truncated_amount_ms > 250:
-                            truncated_segments.append((idx + 1, truncated_amount_ms))
+                        # Registrar para o resumo final
+                        if do_truncate:
+                            pass  # já foi adicionado acima
                         elif speed_used > 1.5:
                             sped_up_segments.append((idx + 1, speed_used))
                         elif speed_used > 1.25:
