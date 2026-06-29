@@ -356,14 +356,12 @@ else:
                             do_truncate = True
                             truncated_segments.append((idx + 1, truncated_amount_ms))
 
-                        # Avisos ao usuário + registrar para resumo
+                        # Registrar para o resumo final (sem mostrar mensagens ao vivo para não poluir a tela)
                         if do_truncate and truncated_amount_ms > 250:
-                            st.warning(f"⚠️ Segment {idx+1} was shortened by ~{truncated_amount_ms}ms to fit timing (text may be cut off). Consider giving this segment more time in SRT.")
+                            truncated_segments.append((idx + 1, truncated_amount_ms))
                         elif speed_used > 1.5:
-                            st.warning(f"⚠️ Segment {idx+1} sped up **{speed_used:.2f}x** (voice may sound rushed — consider shortening text or giving more time in SRT)")
                             sped_up_segments.append((idx + 1, speed_used))
                         elif speed_used > 1.25:
-                            st.info(f"⚡ Segment {idx+1} sped up **{speed_used:.2f}x** to fit timing")
                             sped_up_segments.append((idx + 1, speed_used))
 
                     # Inserir no áudio final no tempo correto da legenda
