@@ -207,8 +207,8 @@ else:
         
         force_fit = st.checkbox(
             "Force segments to fit timing (truncate if needed)",
-            value=True,
-            help="Recommended for slide-synchronized videos. If even at 2x speed the audio is too long, it will be truncated to match the subtitle duration exactly."
+            value=False,
+            help="Only enable this if you want strict subtitle timing. When enabled and even 2x speed is not enough, the end of the sentence will be cut off. For Bible teaching, it's often better to leave it unchecked and adjust SRT timing manually if needed."
         )
         
         model_id = st.selectbox(
@@ -326,6 +326,7 @@ else:
 
                     do_truncate = False
                     speed_used = 1.0
+                    truncated_amount_ms = 0
 
                     if original_dur > available * 1.05:
                         speed = original_dur / available
@@ -343,18 +344,19 @@ else:
 
                         new_dur = int(len(audio_data) / sr * 1000)
 
-                        # Se ainda não couber ou usuário pediu force_fit → truncar
+                        # Truncar apenas se o usuário ativou "force_fit" E ainda não coube
                         if force_fit and new_dur > available:
                             max_samples = int(available / 1000.0 * sr)
+                            truncated_amount_ms = new_dur - available
                             audio_data = audio_data[:max_samples]
                             do_truncate = True
 
                         # Avisos ao usuário
-                        if do_truncate:
-                            st.warning(f"⚠️ Segment {idx+1} was **truncated** to fit the exact subtitle timing (even at max 2x speed).")
+                        if do_truncate and truncated_amount_ms > 250:
+                            st.warning(f"⚠️ Segment {idx+1} was shortened by ~{truncated_amount_ms}ms to fit timing (text may be cut off). Consider giving this segment more time in SRT.")
                         elif speed_used > 1.5:
-                            st.warning(f"⚠️ Segment {idx+1} sped up **{speed_used:.2f}x** (quite fast — consider shortening text in SRT)")
-                        else:
+                            st.warning(f"⚠️ Segment {idx+1} sped up **{speed_used:.2f}x** (voice may sound rushed — consider shortening text or giving more time in SRT)")
+                        elif speed_used > 1.25:
                             st.info(f"⚡ Segment {idx+1} sped up **{speed_used:.2f}x** to fit timing")
 
                     # Inserir no áudio final no tempo correto da legenda
