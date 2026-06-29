@@ -207,7 +207,7 @@ else:
         
         force_fit = st.checkbox(
             "Force segments to fit timing (truncate if needed)",
-            value=False,
+            value=True,
             help="Only enable this if you want strict subtitle timing. When enabled and even 2x speed is not enough, the end of the sentence will be cut off. For Bible teaching, it's often better to leave it unchecked and adjust SRT timing manually if needed."
         )
         
