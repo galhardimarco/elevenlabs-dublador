@@ -49,7 +49,8 @@ def generate_tts(text, output_path, voice_id, stability, similarity, model_id):
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     resp = requests.post(url, headers=HEADERS, json=data, timeout=90)
     if resp.status_code == 200:
-        with open(output_path, 'wb') as f: f.write(resp.content)
+        with open(output_path, 'wb') as f:
+            f.write(resp.content)
         return True
     raise Exception(f"ElevenLabs error {resp.status_code}")
 
@@ -81,7 +82,8 @@ def process_job(task_id):
     force_fit = job["force_fit"]
 
     temp_srt = f"temp_{task_id}.srt"
-    with open(temp_srt, "wb") as f: f.write(file_bytes)
+    with open(temp_srt, "wb") as f:
+        f.write(file_bytes)
 
     subtitles = pysrt.open(temp_srt, encoding='utf-8')
     valid_subs = [s for s in subtitles if s.text.strip()]
@@ -92,13 +94,13 @@ def process_job(task_id):
     sped_up = []
     truncated = []
 
-    progress_bar = st.progress(0, text="Starting...")
+    progress = st.progress(0, text="Starting...")
 
     for idx, sub in enumerate(valid_subs):
         text = sub.text.strip().replace("\n", " ")
         if not text: continue
 
-        progress_bar.progress((idx + 1) / total, text=f"Processing segment {idx+1}/{total}...")
+        progress.progress((idx + 1) / total, text=f"Processing segment {idx+1}/{total}...")
 
         temp_audio = f"seg_{task_id}_{idx}.mp3"
         generate_tts(text, temp_audio, voice_id, stability, similarity, model_id)
@@ -198,7 +200,7 @@ if st.session_state.selected_country is None:
         st.rerun()
 
 else:
-    # ===================== TELA 2 (UI IGUAL À IMAGEM) =====================
+    # ===================== TELA 2 - UI COMO NA IMAGEM =====================
     st.title("🎙️ ElevenLabs SRT Voice Generator")
     st.caption(f"{st.session_state.selected_country} • {st.session_state.selected_voice_name}")
 
@@ -206,7 +208,7 @@ else:
         st.session_state.selected_country = None
         st.rerun()
 
-    # SIDEBAR (igual à imagem)
+    # SIDEBAR
     with st.sidebar:
         st.header("ElevenLabs Account")
         try:
@@ -219,7 +221,7 @@ else:
                 remaining = max(0, limit - used)
                 pct = (used / limit * 100) if limit > 0 else 0
 
-                st.write(f"**Current Plan**\n{tier}")
+                st.write(f"**Current Plan**  \n{tier}")
                 c1, c2 = st.columns(2)
                 c1.metric("Characters Used", f"{used:,}")
                 c2.metric("Remaining", f"{remaining:,}")
@@ -232,20 +234,21 @@ else:
                 else:
                     st.error("Quota almost exhausted")
         except:
-            st.caption("Could not load account info")
+            pass
 
         st.divider()
         st.header("Generation Settings")
         force_fit = st.checkbox("Force segments to fit timing (truncate if needed)", value=False)
         model_id = st.selectbox("ElevenLabs Model", ["eleven_v3", "eleven_turbo_v2_5"], index=0)
 
-    # UPLOAD
-    uploaded_file = st.file_uploader("Upload your .srt file", type=["srt"])
+    # UPLOAD + TIP
+    col_upload, col_tip = st.columns([3, 2])
+    with col_upload:
+        uploaded_file = st.file_uploader("Upload your .srt file", type=["srt"])
+    with col_tip:
+        st.info("Tip: For best results with Bible teaching videos, use **Stability 0.55-0.65** and **Similarity 0.80-0.90** for consistent, trustworthy narration voice.")
 
-    # TIP
-    st.info("Tip: For best results with Bible teaching videos, use **Stability 0.55-0.65** and **Similarity 0.80-0.90** for consistent, trustworthy narration voice.")
-
-    # VOICE QUALITY
+    # VOICE QUALITY SETTINGS
     st.subheader("Voice Quality Settings")
     col1, col2 = st.columns(2)
     with col1:
@@ -253,14 +256,16 @@ else:
     with col2:
         similarity = st.slider("Similarity Boost", 0.0, 1.0, 0.85, 0.05, help="Higher = closer to original voice")
 
-    # PREVIEW
+    # SRT PREVIEW
     if uploaded_file:
         try:
             tmp = f"preview_{int(time.time())}.srt"
-            with open(tmp, "wb") as f: f.write(uploaded_file.getbuffer())
+            with open(tmp, "wb") as f:
+                f.write(uploaded_file.getbuffer())
             subs = pysrt.open(tmp, encoding='utf-8')
             valid = [s for s in subs if s.text.strip()]
             chars = sum(len(s.text.strip()) for s in valid)
+
             with st.expander("SRT Preview & Stats"):
                 st.write(f"**Total segments:** {len(valid)}")
                 st.write(f"**Total characters:** {chars:,}")
@@ -269,7 +274,7 @@ else:
         except:
             pass
 
-    # ===================== GERAÇÃO COM FILA =====================
+    # ===================== GERAÇÃO =====================
     if st.session_state.my_task_id is None:
         if uploaded_file and st.button("Generate Dubbed Audio", type="primary", use_container_width=True):
             task_id = str(uuid.uuid4())[:8]
@@ -323,7 +328,6 @@ else:
                         type="primary"
                     )
 
-            # Resumo
             with st.expander("Processing Summary", expanded=True):
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Total Segments", task.get("total_segments", 0))
@@ -358,7 +362,7 @@ else:
             st.session_state.my_task_id = None
             st.rerun()
 
-    # Instruções
+    # INSTRUÇÕES
     with st.expander("How to use this tool (for non-technical users)"):
         st.markdown("""
         1. Select your voice on the first screen.
