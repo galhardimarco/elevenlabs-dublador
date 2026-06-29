@@ -298,6 +298,10 @@ else:
                 sr = 44100
                 VOICE_ID = st.session_state.selected_voice_id
 
+                # === ESTATÍSTICAS PARA O RESUMO FINAL ===
+                sped_up_segments = []      # lista de (número, velocidade)
+                truncated_segments = []    # lista de (número, ms_cortados)
+
                 for idx, sub in enumerate(valid_subs):
                     text = sub.text.strip().replace("\n", " ")
                     if not text:
@@ -350,14 +354,17 @@ else:
                             truncated_amount_ms = new_dur - available
                             audio_data = audio_data[:max_samples]
                             do_truncate = True
+                            truncated_segments.append((idx + 1, truncated_amount_ms))
 
-                        # Avisos ao usuário
+                        # Avisos ao usuário + registrar para resumo
                         if do_truncate and truncated_amount_ms > 250:
                             st.warning(f"⚠️ Segment {idx+1} was shortened by ~{truncated_amount_ms}ms to fit timing (text may be cut off). Consider giving this segment more time in SRT.")
                         elif speed_used > 1.5:
                             st.warning(f"⚠️ Segment {idx+1} sped up **{speed_used:.2f}x** (voice may sound rushed — consider shortening text or giving more time in SRT)")
+                            sped_up_segments.append((idx + 1, speed_used))
                         elif speed_used > 1.25:
                             st.info(f"⚡ Segment {idx+1} sped up **{speed_used:.2f}x** to fit timing")
+                            sped_up_segments.append((idx + 1, speed_used))
 
                     # Inserir no áudio final no tempo correto da legenda
                     start_sample = int(start_ms / 1000.0 * sr)
@@ -384,14 +391,45 @@ else:
                 status_text.empty()
                 st.success("✅ Audio generated successfully!")
 
-                # Botão de download
+                # ===================== RESUMO FINAL =====================
+                with st.container(border=True):
+                    st.subheader("📋 Processing Summary")
+
+                    total_sped = len(sped_up_segments)
+                    total_truncated = len(truncated_segments)
+
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Total Segments", total)
+                    col2.metric("Needed Speed-up (>1.25x)", total_sped)
+                    col3.metric("Truncated", total_truncated)
+
+                    if total_truncated > 0 or total_sped > 0:
+                        st.markdown("**Segments that needed attention:**")
+
+                        # Mostrar segmentos truncados
+                        if total_truncated > 0:
+                            trunc_text = ", ".join([f"**{num}** (cut {ms}ms)" for num, ms in truncated_segments])
+                            st.markdown(f"- Truncated: {trunc_text}")
+
+                        # Mostrar segmentos acelerados acima de 1.5x
+                        high_speed = [(num, spd) for num, spd in sped_up_segments if spd > 1.5]
+                        if high_speed:
+                            high_text = ", ".join([f"**{num}** ({spd:.2f}x)" for num, spd in high_speed])
+                            st.markdown(f"- Sped up > 1.5x: {high_text}")
+
+                        st.caption("💡 Tip: For important teaching content, consider adjusting the original SRT timing instead of relying heavily on speed-up or truncation.")
+                    else:
+                        st.success("All segments fit well with minimal or no speed adjustment. Great job on the SRT timing!")
+
+                # Botão de download (bem visível depois do resumo)
                 with open(output_path, "rb") as f:
                     st.download_button(
                         label="📥 Download Final Dubbed Audio (.mp3)",
                         data=f,
                         file_name=uploaded_file.name.replace(".srt", f"_dubbed_{st.session_state.selected_voice_name.replace(' ', '_')}.mp3"),
                         mime="audio/mpeg",
-                        use_container_width=True
+                        use_container_width=True,
+                        type="primary"
                     )
 
                 st.balloons()
