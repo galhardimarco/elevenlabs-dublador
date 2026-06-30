@@ -210,7 +210,7 @@ else:
 
     # SIDEBAR
     with st.sidebar:
-        st.header("📁 ElevenLabs Account")
+        st.markdown("### 📁 ElevenLabs Account")
         try:
             resp = requests.get("https://api.elevenlabs.io/v1/user/subscription", headers=HEADERS, timeout=8)
             if resp.status_code == 200:
@@ -221,7 +221,7 @@ else:
                 remaining = max(0, limit - used)
                 pct = (used / limit * 100) if limit > 0 else 0
 
-                st.write(f"**Current Plan**  \n{tier}")
+                st.markdown(f"**Current Plan**<br><span style='font-size:1.5em; font-weight:bold; color:#1f77b4;'>{tier}</span>", unsafe_allow_html=True)
                 c1, c2 = st.columns(2)
                 c1.metric("Characters Used", f"{used:,}")
                 c2.metric("Remaining", f"{remaining:,}")
@@ -368,7 +368,7 @@ else:
             st.rerun()
 
     # INSTRUÇÕES
-    with st.expander("How to use this tool (for non-technical users)"):
+    with st.expander("ℹ️ How to use this tool (for non-technical users)"):
         st.markdown("""
         1. Select your voice on the first screen.
         2. Upload your .srt file.
