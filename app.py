@@ -210,7 +210,7 @@ else:
 
     # SIDEBAR
     with st.sidebar:
-        st.header("ElevenLabs Account")
+        st.header("📁 ElevenLabs Account")
         try:
             resp = requests.get("https://api.elevenlabs.io/v1/user/subscription", headers=HEADERS, timeout=8)
             if resp.status_code == 200:
@@ -228,18 +228,18 @@ else:
                 st.progress(pct / 100, text=f"{pct:.1f}% of monthly quota used")
 
                 if pct < 70:
-                    st.success("Good quota balance")
+                    st.success("✅ Good quota balance")
                 elif pct < 85:
-                    st.warning("Quota running low")
+                    st.warning("⚠️ Quota running low")
                 else:
-                    st.error("Quota almost exhausted")
+                    st.error("⚠️ Quota almost exhausted")
         except:
             pass
 
         st.divider()
         st.header("⚙️ Generation Settings")
-        force_fit = st.checkbox("Force segments to fit timing (truncate if needed)", value=False)
-        model_id = st.selectbox("ElevenLabs Model", ["eleven_v3", "eleven_turbo_v2_5"], index=0)
+        force_fit = st.checkbox("Force segments to fit timing (truncate if needed)", value=False, help="If enabled and even at 2x speed the audio is still too long, the end of the sentence will be cut off. Recommended: OFF for Bible teaching content.")
+        model_id = st.selectbox("ElevenLabs Model", ["eleven_v3", "eleven_turbo_v2_5"], index=0, help="eleven_v3 = highest quality. eleven_turbo_v2_5 = faster and cheaper.")
 
     # UPLOAD + TIP
     col_upload, col_tip = st.columns([3, 2])
@@ -348,6 +348,8 @@ else:
                 remove_from_queue(task_id)
                 st.session_state.my_task_id = None
                 st.rerun()
+
+            st.balloons()
 
         elif task.get("status") == "error":
             st.error(f"Error: {task.get('error')}")
