@@ -241,12 +241,12 @@ else:
         force_fit = st.checkbox("Force segments to fit timing (truncate if needed)", value=False, help="If enabled and even at 2x speed the audio is still too long, the end of the sentence will be cut off. Recommended: OFF for Bible teaching content.")
         model_id = st.selectbox("ElevenLabs Model", ["eleven_v3", "eleven_turbo_v2_5"], index=0, help="eleven_v3 = highest quality. eleven_turbo_v2_5 = faster and cheaper.")
 
-    # UPLOAD + TIP
-    col_upload, col_tip = st.columns([3, 2])
-    with col_upload:
+    # UPLOAD + HELP ICON (como na imagem original)
+    col1, col2 = st.columns([12, 1])
+    with col1:
         uploaded_file = st.file_uploader("📁 Upload your .srt file", type=["srt"])
-    with col_tip:
-        st.info("💡 Tip: For best results with Bible teaching videos, use **Stability 0.55-0.65** and **Similarity 0.80-0.90** for consistent, trustworthy narration voice.")
+    with col2:
+        st.markdown("<div style='margin-top:26px; font-size:18px; color:#888; cursor:help;' title='Upload the subtitle file from your video project'>❓</div>", unsafe_allow_html=True)
 
     # VOICE QUALITY SETTINGS
     st.subheader("🎛️ Voice Quality Settings")
