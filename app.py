@@ -238,7 +238,7 @@ else:
 
         st.divider()
         st.header("⚙️ Generation Settings")
-        force_fit = st.checkbox("Force segments to fit timing (truncate if needed)", value=False, help="If enabled and even at 2x speed the audio is still too long, the end of the sentence will be cut off. Recommended: OFF for Bible teaching content.")
+        force_fit = st.checkbox("Force segments to fit timing (truncate if needed)", value=True, help="If enabled and even at 2x speed the audio is still too long, the end of the sentence will be cut off. Recommended: OFF for Bible teaching content.")
         model_id = st.selectbox("ElevenLabs Model", ["eleven_v3", "eleven_turbo_v2_5"], index=0, help="eleven_v3 = highest quality. eleven_turbo_v2_5 = faster and cheaper.")
 
     # UPLOAD + TIP
