@@ -100,7 +100,7 @@ def process_job(task_id):
         text = sub.text.strip().replace("\n", " ")
         if not text: continue
 
-        progress.progress((idx + 1) / total, text=f"Processing segment {idx+1}/{total}...")
+        progress.progress((idx + 1) / total, text=f"🎤 Processing segment {idx+1}/{total}...")
 
         temp_audio = f"seg_{task_id}_{idx}.mp3"
         generate_tts(text, temp_audio, voice_id, stability, similarity, model_id)
@@ -210,7 +210,7 @@ else:
 
     # SIDEBAR
     with st.sidebar:
-        st.markdown("### 📁 ElevenLabs Account")
+        st.markdown("### 📊 ElevenLabs Account")
         try:
             resp = requests.get("https://api.elevenlabs.io/v1/user/subscription", headers=HEADERS, timeout=8)
             if resp.status_code == 200:
@@ -244,7 +244,10 @@ else:
     # UPLOAD + TIP
     col_upload, col_tip = st.columns([3, 2])
     with col_upload:
-        uploaded_file = st.file_uploader("📁 Upload your .srt file", type=["srt"])
+        uploaded_file = st.file_uploader("📁 Upload your .srt file", 
+        type=["srt"],
+        help="Upload the subtitle file exported from your video editor or transcription tool."
+        )
     with col_tip:
         st.info("💡 Tip: For best results with Bible teaching videos, use **Stability 0.55-0.65** and **Similarity 0.80-0.90** for consistent, trustworthy narration voice.")
 
@@ -252,9 +255,9 @@ else:
     st.subheader("🎛️ Voice Quality Settings")
     col1, col2 = st.columns(2)
     with col1:
-        stability = st.slider("Stability", 0.0, 1.0, 0.60, 0.05, help="Higher = more consistent voice")
+        stability = st.slider("Stability", 0.0, 1.0, 0.60, 0.05, help="Higher = more consistent voice (recommended for teaching). Lower = more expressive/emotional.")
     with col2:
-        similarity = st.slider("Similarity Boost", 0.0, 1.0, 0.85, 0.05, help="Higher = closer to original voice")
+        similarity = st.slider("Similarity Boost", 0.0, 1.0, 0.85, 0.05, help="Higher = closer to the original voice timbre. Good for brand consistency.")
 
     # SRT PREVIEW (igual ao original)
     if uploaded_file:
@@ -266,7 +269,7 @@ else:
             valid = [s for s in subs if s.text.strip()]
             chars = sum(len(s.text.strip()) for s in valid)
 
-            with st.expander("SRT Preview & Stats"):
+            with st.expander("📋 SRT Preview & Stats"):
                 st.write(f"**Total segments:** {len(valid)}")
                 st.write(f"**Total characters:** {chars:,}")
                 st.write(f"**Estimated cost (eleven_v3):** ~${chars/1000 * 0.10:.2f} USD")
@@ -279,7 +282,7 @@ else:
 
     # ===================== GERAÇÃO =====================
     if st.session_state.my_task_id is None:
-        if uploaded_file and st.button("Generate Dubbed Audio", type="primary", use_container_width=True):
+        if uploaded_file and st.button("🚀 Generate Dubbed Audio", type="primary", use_container_width=True):
             task_id = str(uuid.uuid4())[:8]
             st.session_state.tasks[task_id] = {
                 "status": "queued",
@@ -317,13 +320,13 @@ else:
                     st.rerun()
 
         elif task.get("status") == "done":
-            st.success("Audio generated successfully!")
+            st.success("✅ Audio generated successfully!")
 
             result_path = task.get("result_path")
             if result_path and os.path.exists(result_path):
                 with open(result_path, "rb") as f:
                     st.download_button(
-                        "Download Final Dubbed Audio",
+                        "📥 Download Final Dubbed Audio (.mp3)",
                         data=f,
                         file_name=task.get("filename", "dubbed.mp3"),
                         mime="audio/mpeg",
@@ -331,7 +334,7 @@ else:
                         type="primary"
                     )
 
-            with st.expander("Processing Summary", expanded=True):
+            with st.expander("📋 Processing Summary", expanded=True):
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Total Segments", task.get("total_segments", 0))
                 c2.metric("Needed Speed-up", len(task.get("sped_up", [])))
@@ -352,7 +355,7 @@ else:
             st.balloons()
 
         elif task.get("status") == "error":
-            st.error(f"Error: {task.get('error')}")
+            st.error(f"❌ Error: {task.get('error')}")
             if st.button("Try again"):
                 if task_id in st.session_state.tasks:
                     del st.session_state.tasks[task_id]
