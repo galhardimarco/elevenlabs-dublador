@@ -10,7 +10,7 @@ import queue
 import uuid
 from datetime import datetime
 
-st.set_page_config(page_title="Tools Hub", page_icon="🛠️", layout="wide")
+st.set_page_config(page_title="ElevenLabs SRT Voice Generator", page_icon="🎙️", layout="wide")
 
 # ===================== CONFIG =====================
 API_KEY = st.secrets["ELEVENLABS_API_KEY"]
@@ -189,32 +189,35 @@ if not check_password():
     st.stop()
 
 # ===================== ESTADO =====================
-if "selected_tool" not in st.session_state:
-    st.session_state.selected_tool = None
 if "my_task_id" not in st.session_state:
     st.session_state.my_task_id = None
 if "selected_country" not in st.session_state:
     st.session_state.selected_country = None
 
-# ===================== MENU PRINCIPAL =====================
-if st.session_state.selected_tool is None:
-    st.title("🛠️ Tools Hub")
-    st.markdown("### Escolha a ferramenta que deseja utilizar")
+# ===================== TELA 1: VOZ =====================
+if st.session_state.selected_country is None:
+    st.title("🌍 ElevenLabs SRT Voice Generator")
+    st.markdown("### Select your voice / language")
 
-    tool = st.radio(
-        "Selecione uma ferramenta:",
-        options=["🎙️ Voice Dubbing (ElevenLabs)", "🎤 Audio Transcription (AssemblyAI)"],
-        horizontal=True
-    )
+    country = st.selectbox("Choose voice", options=list(COUNTRY_VOICES.keys()), index=0)
+    st.info("**Recommended for Brazilian Portuguese content:** Brazil voice")
 
-    if st.button("Continuar →", type="primary", use_container_width=True):
-        st.session_state.selected_tool = tool
+    if st.button("Continue →", type="primary", use_container_width=True):
+        st.session_state.selected_country = country
+        st.session_state.selected_voice_name = COUNTRY_VOICES[country]["name"]
+        st.session_state.selected_voice_id = COUNTRY_VOICES[country]["id"]
         st.rerun()
 
-# ===================== VOICE DUBBING (ElevenLabs) =====================
-elif st.session_state.selected_tool == "🎙️ Voice Dubbing (ElevenLabs)":
+else:
+    # ===================== TELA 2 =====================
+    st.title("🎙️ ElevenLabs SRT Voice Generator")
+    st.caption(f"{st.session_state.selected_country} • {st.session_state.selected_voice_name}")
 
-    # SIDEBAR - CRÉDITOS SEMPRE VISÍVEL
+    if st.button("← Change Voice / Country"):
+        st.session_state.selected_country = None
+        st.rerun()
+
+    # SIDEBAR
     with st.sidebar:
         st.markdown("### 📊 ElevenLabs Account")
         try:
@@ -249,167 +252,144 @@ elif st.session_state.selected_tool == "🎙️ Voice Dubbing (ElevenLabs)":
         model_id = st.selectbox("ElevenLabs Model", ["eleven_v3", "eleven_turbo_v2_5"], index=0,
                                 help="eleven_v3 = highest quality. eleven_turbo_v2_5 = faster and cheaper.")
 
-    # TELA 1: ESCOLHA DE VOZ
-    if st.session_state.selected_country is None:
-        st.title("🎙️ ElevenLabs SRT Voice Generator")
-        st.markdown("### Select your voice / language")
+    # UPLOAD + TIP
+    col_upload, col_tip = st.columns([3, 2])
+    with col_upload:
+        uploaded_file = st.file_uploader("📁 Upload your .srt file", type=["srt"],
+            help="Upload the subtitle file exported from your video editor or transcription tool.")
+    with col_tip:
+        st.info("💡 Tip: For best results with Bible teaching videos, use **Stability 0.55-0.65** and **Similarity 0.80-0.90** for consistent, trustworthy narration voice.")
 
-        country = st.selectbox("Choose voice", options=list(COUNTRY_VOICES.keys()), index=0)
-        st.info("**Recommended for Brazilian Portuguese content:** Brazil voice")
+    # VOICE QUALITY SETTINGS (agora com Speed)
+    st.subheader("🎛️ Voice Quality Settings")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        stability = st.slider("Stability", 0.0, 1.0, 0.60, 0.05, 
+                              help="Higher = more consistent voice (recommended for teaching)")
+    with col2:
+        similarity = st.slider("Similarity Boost", 0.0, 1.0, 0.85, 0.05,
+                               help="Higher = closer to the original voice timbre")
+    with col3:
+        speed = st.slider("Speed", 0.7, 1.2, 1.0, 0.05,
+                          help="Native speed from ElevenLabs. Values > 1.0 = faster, < 1.0 = slower. Sounds more natural than FFmpeg.")
 
-        if st.button("Continue →", type="primary", use_container_width=True):
-            st.session_state.selected_country = country
-            st.session_state.selected_voice_name = COUNTRY_VOICES[country]["name"]
-            st.session_state.selected_voice_id = COUNTRY_VOICES[country]["id"]
+    # SRT PREVIEW
+    if uploaded_file:
+        try:
+            tmp = f"preview_{int(time.time())}.srt"
+            with open(tmp, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            subs = pysrt.open(tmp, encoding='utf-8')
+            valid = [s for s in subs if s.text.strip()]
+            chars = sum(len(s.text.strip()) for s in valid)
+
+            with st.expander("📋 SRT Preview & Stats"):
+                st.write(f"**Total segments:** {len(valid)}")
+                st.write(f"**Total characters:** {chars:,}")
+                st.write(f"**Estimated cost (eleven_v3):** ~${chars/1000 * 0.10:.2f} USD")
+                st.write("**First 5 segments:**")
+                for i, s in enumerate(valid[:5]):
+                    st.write(f"[{i+1}] {s.text.strip()[:80]}{'...' if len(s.text.strip()) > 80 else ''}")
+            os.remove(tmp)
+        except:
+            pass
+
+    # ===================== GERAÇÃO =====================
+    if st.session_state.my_task_id is None:
+        if uploaded_file and st.button("🚀 Generate Dubbed Audio", type="primary", use_container_width=True):
+            task_id = str(uuid.uuid4())[:8]
+            st.session_state.tasks[task_id] = {
+                "status": "queued",
+                "file_bytes": uploaded_file.getbuffer().tobytes(),
+                "filename": uploaded_file.name,
+                "voice_id": st.session_state.selected_voice_id,
+                "stability": stability,
+                "similarity": similarity,
+                "speed": speed,
+                "model_id": model_id,
+                "force_fit": force_fit,
+            }
+            add_to_queue(task_id)
+            st.session_state.my_task_id = task_id
             st.rerun()
 
     else:
-        # TELA 2: INTERFACE PRINCIPAL
-        st.title("🎙️ ElevenLabs SRT Voice Generator")
-        st.caption(f"{st.session_state.selected_country} • {st.session_state.selected_voice_name}")
+        task_id = st.session_state.my_task_id
+        task = st.session_state.tasks.get(task_id, {})
+        pos = get_position(task_id)
 
-        if st.button("← Change Voice / Country"):
-            st.session_state.selected_country = None
-            st.rerun()
-
-        # UPLOAD + TIP
-        col_upload, col_tip = st.columns([3, 2])
-        with col_upload:
-            uploaded_file = st.file_uploader("📁 Upload your .srt file", type=["srt"],
-                help="Upload the subtitle file exported from your video editor or transcription tool.")
-        with col_tip:
-            st.info("💡 Tip: For best results with Bible teaching videos, use **Stability 0.55-0.65** and **Similarity 0.80-0.90** for consistent, trustworthy narration voice.")
-
-        # VOICE QUALITY SETTINGS
-        st.subheader("🎛️ Voice Quality Settings")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            stability = st.slider("Stability", 0.0, 1.0, 0.60, 0.05, 
-                                  help="Higher = more consistent voice (recommended for teaching)")
-        with col2:
-            similarity = st.slider("Similarity Boost", 0.0, 1.0, 0.85, 0.05,
-                                   help="Higher = closer to the original voice timbre")
-        with col3:
-            speed = st.slider("Speed", 0.7, 1.2, 1.0, 0.05,
-                              help="Native speed from ElevenLabs. Values > 1.0 = faster, < 1.0 = slower.")
-
-        # SRT PREVIEW
-        if uploaded_file:
-            try:
-                tmp = f"preview_{int(time.time())}.srt"
-                with open(tmp, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                subs = pysrt.open(tmp, encoding='utf-8')
-                valid = [s for s in subs if s.text.strip()]
-                chars = sum(len(s.text.strip()) for s in valid)
-
-                with st.expander("📋 SRT Preview & Stats"):
-                    st.write(f"**Total segments:** {len(valid)}")
-                    st.write(f"**Total characters:** {chars:,}")
-                    st.write(f"**Estimated cost (eleven_v3):** ~${chars/1000 * 0.10:.2f} USD")
-                    st.write("**First 5 segments:**")
-                    for i, s in enumerate(valid[:5]):
-                        st.write(f"[{i+1}] {s.text.strip()[:80]}{'...' if len(s.text.strip()) > 80 else ''}")
-                os.remove(tmp)
-            except:
-                pass
-
-        # GERAÇÃO
-        if st.session_state.my_task_id is None:
-            if uploaded_file and st.button("🚀 Generate Dubbed Audio", type="primary", use_container_width=True):
-                task_id = str(uuid.uuid4())[:8]
-                st.session_state.tasks[task_id] = {
-                    "status": "queued",
-                    "file_bytes": uploaded_file.getbuffer().tobytes(),
-                    "filename": uploaded_file.name,
-                    "voice_id": st.session_state.selected_voice_id,
-                    "stability": stability,
-                    "similarity": similarity,
-                    "speed": speed,
-                    "model_id": model_id,
-                    "force_fit": force_fit,
-                }
-                add_to_queue(task_id)
-                st.session_state.my_task_id = task_id
-                st.rerun()
-
-        else:
-            task_id = st.session_state.my_task_id
-            task = st.session_state.tasks.get(task_id, {})
-            pos = get_position(task_id)
-
-            if task.get("status") == "queued":
-                if pos == 0:
-                    st.warning("It's your turn! Processing now...")
-                    with st.spinner("Generating audio... Please wait."):
-                        try:
-                            process_job(task_id)
-                            st.rerun()
-                        except Exception as e:
-                            st.session_state.tasks[task_id]["status"] = "error"
-                            st.session_state.tasks[task_id]["error"] = str(e)
-                            st.rerun()
-                else:
-                    st.info(f"You are in position **#{pos + 1}** in the queue.")
-                    if st.button("Refresh status"):
+        if task.get("status") == "queued":
+            if pos == 0:
+                st.warning("It's your turn! Processing now...")
+                with st.spinner("Generating audio... Please wait."):
+                    try:
+                        process_job(task_id)
                         st.rerun()
-
-            elif task.get("status") == "done":
-                st.success("✅ Audio generated successfully!")
-
-                result_path = task.get("result_path")
-                if result_path and os.path.exists(result_path):
-                    with open(result_path, "rb") as f:
-                        st.download_button(
-                            "📥 Download Final Dubbed Audio (.mp3)",
-                            data=f,
-                            file_name=task.get("filename", "dubbed.mp3"),
-                            mime="audio/mpeg",
-                            use_container_width=True,
-                            type="primary"
-                        )
-
-                with st.expander("📋 Processing Summary", expanded=True):
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("Total Segments", task.get("total_segments", 0))
-                    c2.metric("Needed Speed-up", len(task.get("sped_up", [])))
-                    c3.metric("Truncated", len(task.get("truncated", [])))
-
-                    if task.get("truncated"):
-                        st.write("**Truncated:**", ", ".join([f"{n} (cut {m}ms)" for n, m in task["truncated"]]))
-                        st.error("Segment(s) truncated. Please consider revising the line(s) in question.")
-                    if task.get("sped_up"):
-                        st.write("**Sped up:**", ", ".join([f"{n} ({s:.2f}x)" for n, s in task["sped_up"]]))
-
-                    if task.get("truncated") or task.get("sped_up"):
-                        st.caption("💡 Tip: For important teaching content, consider adjusting the original SRT timing instead of relying heavily on speed-up or truncation.")
-                    else:
-                        st.success("All segments fit well with minimal or no speed adjustment. Great job on the SRT timing!")
-
-                if st.button("Process another file"):
-                    if task_id in st.session_state.tasks:
-                        del st.session_state.tasks[task_id]
-                    remove_from_queue(task_id)
-                    st.session_state.my_task_id = None
+                    except Exception as e:
+                        st.session_state.tasks[task_id]["status"] = "error"
+                        st.session_state.tasks[task_id]["error"] = str(e)
+                        st.rerun()
+            else:
+                st.info(f"You are in position **#{pos + 1}** in the queue.")
+                if st.button("Refresh status"):
                     st.rerun()
 
-                st.balloons()
+        elif task.get("status") == "done":
+            st.success("✅ Audio generated successfully!")
 
-            elif task.get("status") == "error":
-                st.error(f"❌ Error: {task.get('error')}")
-                if st.button("Try again"):
-                    if task_id in st.session_state.tasks:
-                        del st.session_state.tasks[task_id]
-                    remove_from_queue(task_id)
-                    st.session_state.my_task_id = None
-                    st.rerun()
+            result_path = task.get("result_path")
+            if result_path and os.path.exists(result_path):
+                with open(result_path, "rb") as f:
+                    st.download_button(
+                        "📥 Download Final Dubbed Audio (.mp3)",
+                        data=f,
+                        file_name=task.get("filename", "dubbed.mp3"),
+                        mime="audio/mpeg",
+                        use_container_width=True,
+                        type="primary"
+                    )
 
-            if st.button("Cancel"):
+            with st.expander("📋 Processing Summary", expanded=True):
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Total Segments", task.get("total_segments", 0))
+                c2.metric("Needed Speed-up", len(task.get("sped_up", [])))
+                c3.metric("Truncated", len(task.get("truncated", [])))
+
+                if task.get("truncated"):
+                    st.write("**Truncated:**", ", ".join([f"{n} (cut {m}ms)" for n, m in task["truncated"]]))
+                    st.error("Segment(s) truncated. Please, consider revising the line(s) in question.")
+                if task.get("sped_up"):
+                    st.write("**Sped up:**", ", ".join([f"{n} ({s:.2f}x)" for n, s in task["sped_up"]]))
+               
+                if task.get("truncated") or task.get("sped_up"):
+                    st.caption("💡 Tip: For important teaching content, consider adjusting the original SRT timing instead of relying heavily on speed-up or truncation.")
+                else:
+                    st.success("All segments fit well with minimal or no speed adjustment. Great job on the SRT timing!")
+
+            if st.button("Process another file"):
                 if task_id in st.session_state.tasks:
                     del st.session_state.tasks[task_id]
                 remove_from_queue(task_id)
                 st.session_state.my_task_id = None
                 st.rerun()
+
+            st.balloons()
+
+        elif task.get("status") == "error":
+            st.error(f"❌ Error: {task.get('error')}")
+            if st.button("Try again"):
+                if task_id in st.session_state.tasks:
+                    del st.session_state.tasks[task_id]
+                remove_from_queue(task_id)
+                st.session_state.my_task_id = None
+                st.rerun()
+
+        if st.button("Cancel"):
+            if task_id in st.session_state.tasks:
+                del st.session_state.tasks[task_id]
+            remove_from_queue(task_id)
+            st.session_state.my_task_id = None
+            st.rerun()
 
     # INSTRUÇÕES
     with st.expander("ℹ️ How to use this tool (for non-technical users)"):
@@ -423,12 +403,3 @@ elif st.session_state.selected_tool == "🎙️ Voice Dubbing (ElevenLabs)":
         """)
 
     st.caption("Made with ❤️ for faithful content creators • Powered by ElevenLabs + Streamlit")
-
-# ===================== AUDIO TRANSCRIPTION (PLACEHOLDER) =====================
-elif st.session_state.selected_tool == "🎤 Audio Transcription (AssemblyAI)":
-    st.title("🎤 Audio Transcription - AssemblyAI")
-    st.info("Esta seção será implementada na próxima etapa (Transcrição Normal + Diarização).")
-
-    if st.button("← Voltar ao Menu Principal"):
-        st.session_state.selected_tool = None
-        st.rerun()
