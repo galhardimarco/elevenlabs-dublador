@@ -441,14 +441,120 @@ elif st.session_state.selected_tool == "🎤 Audio Transcription (AssemblyAI)":
 
     tab1, tab2 = st.tabs(["Normal Transcription", "Transcription with Diarization"])
 
+    # ===================== ABA 1: TRANSCRIÇÃO NORMAL =====================
     with tab1:
         st.subheader("Normal Transcription")
-        st.info("This section will be implemented soon (Standard transcription without speaker identification).")
 
+        uploaded_audio = st.file_uploader(
+            "📁 Upload your audio file",
+            type=["mp3", "wav", "m4a", "ogg"],
+            help="Upload an audio file to transcribe into SRT subtitles."
+        )
+
+        if uploaded_audio:
+            st.info(f"File ready: **{uploaded_audio.name}**")
+
+        if st.button("🚀 Transcribe Audio", type="primary", use_container_width=True, disabled=not uploaded_audio):
+            task_id = str(uuid.uuid4())[:8]
+
+            st.session_state.tasks[task_id] = {
+                "status": "queued",
+                "job_type": "transcription",
+                "file_bytes": uploaded_audio.getbuffer().tobytes(),
+                "filename": uploaded_audio.name,
+                "diarization": False,
+                "speaker_names": {},
+            }
+            add_to_queue(task_id)
+            st.session_state.my_task_id = task_id
+            st.rerun()
+
+        # Status da fila / processamento
+        if st.session_state.my_task_id:
+            task_id = st.session_state.my_task_id
+            task = st.session_state.tasks.get(task_id, {})
+            pos = get_position(task_id)
+
+            if task.get("job_type") == "transcription":
+                if task.get("status") == "queued":
+                    if pos == 0:
+                        st.warning("It's your turn! Transcribing now...")
+                        with st.spinner("Transcribing audio with AssemblyAI... Please wait."):
+                            try:
+                                # Processamento da transcrição normal
+                                import assemblyai as aai
+                                from datetime import timedelta
+
+                                aai.settings.api_key = st.secrets["ASSEMBLYAI_API_KEY"]
+
+                                temp_audio_path = f"temp_audio_{task_id}.mp3"
+                                with open(temp_audio_path, "wb") as f:
+                                    f.write(task["file_bytes"])
+
+                                config = aai.TranscriptionConfig(
+                                    speech_models=["universal-3-pro", "universal-2"],
+                                    language_detection=True,
+                                )
+
+                                transcriber = aai.Transcriber()
+                                transcript = transcriber.transcribe(temp_audio_path, config=config)
+
+                                if transcript.status == aai.TranscriptStatus.error:
+                                    st.error(f"Transcription failed: {transcript.error}")
+                                else:
+                                    # Gerar SRT
+                                    sentences = transcript.get_sentences()
+                                    srt_lines = []
+                                    for i, sentence in enumerate(sentences, 1):
+                                        def format_ts(ms):
+                                            td = timedelta(milliseconds=ms)
+                                            h = int(td.total_seconds() // 3600)
+                                            m = int((td.total_seconds() % 3600) // 60)
+                                            s = int(td.total_seconds() % 60)
+                                            ms_part = ms % 1000
+                                            return f"{h:02d}:{m:02d}:{s:02d},{ms_part:03d}"
+
+                                        start = format_ts(sentence.start)
+                                        end = format_ts(sentence.end)
+                                        srt_lines.append(f"{i}\n{start} --> {end}\n{sentence.text.strip()}\n\n")
+
+                                    srt_content = "".join(srt_lines)
+                                    srt_filename = task["filename"].rsplit(".", 1)[0] + ".srt"
+
+                                    st.success("✅ Transcription completed!")
+
+                                    st.download_button(
+                                        "📥 Download SRT File",
+                                        data=srt_content,
+                                        file_name=srt_filename,
+                                        mime="text/plain",
+                                        use_container_width=True,
+                                        type="primary"
+                                    )
+
+                                    # Limpar task
+                                    if task_id in st.session_state.tasks:
+                                        del st.session_state.tasks[task_id]
+                                    remove_from_queue(task_id)
+                                    st.session_state.my_task_id = None
+
+                            except Exception as e:
+                                st.error(f"Error during transcription: {str(e)}")
+                                if task_id in st.session_state.tasks:
+                                    del st.session_state.tasks[task_id]
+                                remove_from_queue(task_id)
+                                st.session_state.my_task_id = None
+                    else:
+                        st.info(f"You are in position **#{pos + 1}** in the queue.")
+                        if st.button("Refresh"):
+                            st.rerun()
+
+    # ===================== ABA 2: DIARIZAÇÃO (PLACEHOLDER) =====================
     with tab2:
         st.subheader("Transcription with Diarization")
-        st.info("This section will be implemented soon (Transcription with speaker identification + name mapping).")
+        st.info("This tab will be implemented next (with speaker name mapping).")
 
     if st.button("← Back to Main Menu"):
         st.session_state.selected_tool = None
+        st.session_state.my_task_id = None
         st.rerun()
