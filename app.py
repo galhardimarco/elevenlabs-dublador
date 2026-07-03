@@ -276,7 +276,7 @@ elif st.session_state.selected_tool == "🎙️ Voice Dubbing (ElevenLabs)":
     else:
         # TELA 2
         st.title("🎙️ ElevenLabs SRT Voice Generator")
-        st.caption(f"{st.session_state.selected_country} • {st.session_state.selected_voice_name}")
+        st.info(f"{st.session_state.selected_country} • {st.session_state.selected_voice_name}")
 
         if st.button("← Change Voice / Country"):
             st.session_state.selected_country = None
