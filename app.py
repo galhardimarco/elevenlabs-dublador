@@ -10,7 +10,11 @@ import queue
 import uuid
 from datetime import datetime
 
-st.set_page_config(page_title="Tools Hub", page_icon="🛠️", layout="wide")
+st.set_page_config(
+    page_title="Behold Israel Translation Team",
+    page_icon="📖",
+    layout="wide"
+)
 
 # ===================== CONFIG =====================
 API_KEY = st.secrets["ELEVENLABS_API_KEY"]
@@ -198,24 +202,23 @@ if "selected_country" not in st.session_state:
 
 # ===================== MENU PRINCIPAL =====================
 if st.session_state.selected_tool is None:
-    st.title("🛠️ Tools Hub")
-    st.markdown("### Escolha a ferramenta que deseja utilizar")
+    st.title("Behold Israel Translation Team")
+    st.markdown("### Choose the tool you want to use")
 
     tool = st.radio(
-        "Selecione uma ferramenta:",
+        "Select a tool:",
         options=["🎙️ Voice Dubbing (ElevenLabs)", "🎤 Audio Transcription (AssemblyAI)"],
         horizontal=True
     )
 
-    if st.button("Continuar →", type="primary", use_container_width=True):
+    if st.button("Continue →", type="primary", use_container_width=True):
         st.session_state.selected_tool = tool
         st.rerun()
 
 # ===================== VOICE DUBBING (ElevenLabs) =====================
 elif st.session_state.selected_tool == "🎙️ Voice Dubbing (ElevenLabs)":
 
-    # ===================== BOTÃO VOLTAR AO MENU =====================
-    if st.button("← Voltar ao Menu Principal", use_container_width=False):
+    if st.button("← Back to Main Menu"):
         st.session_state.selected_tool = None
         st.session_state.selected_country = None
         st.session_state.my_task_id = None
@@ -271,7 +274,7 @@ elif st.session_state.selected_tool == "🎙️ Voice Dubbing (ElevenLabs)":
             st.rerun()
 
     else:
-        # TELA 2: INTERFACE PRINCIPAL
+        # TELA 2
         st.title("🎙️ ElevenLabs SRT Voice Generator")
         st.caption(f"{st.session_state.selected_country} • {st.session_state.selected_voice_name}")
 
@@ -431,21 +434,11 @@ elif st.session_state.selected_tool == "🎙️ Voice Dubbing (ElevenLabs)":
 
     st.caption("Made with ❤️ for faithful content creators • Powered by ElevenLabs + Streamlit")
 
-# ===================== AUDIO TRANSCRIPTION (INÍCIO DA ETAPA 3) =====================
+# ===================== AUDIO TRANSCRIPTION (PLACEHOLDER) =====================
 elif st.session_state.selected_tool == "🎤 Audio Transcription (AssemblyAI)":
-
     st.title("🎤 Audio Transcription - AssemblyAI")
+    st.info("This section will be implemented in the next step (Normal Transcription + Diarization).")
 
-    tab1, tab2 = st.tabs(["Transcrição Normal", "Transcrição com Diarização"])
-
-    with tab1:
-        st.subheader("Transcrição Normal")
-        st.info("Aqui será implementada a transcrição normal (sem identificação de falantes).")
-
-    with tab2:
-        st.subheader("Transcrição com Diarização")
-        st.info("Aqui será implementada a transcrição com identificação de falantes + mapeamento de nomes.")
-
-    if st.button("← Voltar ao Menu Principal"):
+    if st.button("← Back to Main Menu"):
         st.session_state.selected_tool = None
         st.rerun()
