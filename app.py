@@ -214,7 +214,49 @@ if st.session_state.selected_tool is None:
 # ===================== VOICE DUBBING (ElevenLabs) =====================
 elif st.session_state.selected_tool == "🎙️ Voice Dubbing (ElevenLabs)":
 
-    # ===================== TELA 1: VOZ =====================
+    # ===================== BOTÃO VOLTAR AO MENU =====================
+    if st.button("← Voltar ao Menu Principal", use_container_width=False):
+        st.session_state.selected_tool = None
+        st.session_state.selected_country = None
+        st.session_state.my_task_id = None
+        st.rerun()
+
+    # SIDEBAR
+    with st.sidebar:
+        st.markdown("### 📊 ElevenLabs Account")
+        try:
+            resp = requests.get("https://api.elevenlabs.io/v1/user/subscription", headers=HEADERS, timeout=8)
+            if resp.status_code == 200:
+                d = resp.json()
+                used = d.get("character_count", 0)
+                limit = d.get("character_limit", 0)
+                tier = d.get("tier", "creator")
+                remaining = max(0, limit - used)
+                pct = (used / limit * 100) if limit > 0 else 0
+
+                st.markdown(f"**Current Plan**<br><span style='font-size:1.5em; font-weight:bold; color:#1f77b4;'>{tier}</span>", unsafe_allow_html=True)
+                c1, c2 = st.columns(2)
+                c1.metric("Characters Used", f"{used:,}")
+                c2.metric("Remaining", f"{remaining:,}")
+                st.progress(pct / 100, text=f"{pct:.1f}% of monthly quota used")
+
+                if pct < 70:
+                    st.success("✅ Good quota balance")
+                elif pct < 85:
+                    st.warning("⚠️ Quota running low")
+                else:
+                    st.error("⚠️ Quota almost exhausted")
+        except:
+            pass
+
+        st.divider()
+        st.header("⚙️ Generation Settings")
+        force_fit = st.checkbox("Force segments to fit timing (truncate if needed)", value=True, 
+                                help="If enabled and even at 2x speed the audio is still too long, the end of the sentence will be cut off.")
+        model_id = st.selectbox("ElevenLabs Model", ["eleven_v3", "eleven_turbo_v2_5"], index=0,
+                                help="eleven_v3 = highest quality. eleven_turbo_v2_5 = faster and cheaper.")
+
+    # TELA 1: ESCOLHA DE VOZ
     if st.session_state.selected_country is None:
         st.title("🎙️ ElevenLabs SRT Voice Generator")
         st.markdown("### Select your voice / language")
@@ -229,48 +271,13 @@ elif st.session_state.selected_tool == "🎙️ Voice Dubbing (ElevenLabs)":
             st.rerun()
 
     else:
-        # ===================== TELA 2 =====================
+        # TELA 2: INTERFACE PRINCIPAL
         st.title("🎙️ ElevenLabs SRT Voice Generator")
         st.caption(f"{st.session_state.selected_country} • {st.session_state.selected_voice_name}")
 
         if st.button("← Change Voice / Country"):
             st.session_state.selected_country = None
             st.rerun()
-
-        # SIDEBAR
-        with st.sidebar:
-            st.markdown("### 📊 ElevenLabs Account")
-            try:
-                resp = requests.get("https://api.elevenlabs.io/v1/user/subscription", headers=HEADERS, timeout=8)
-                if resp.status_code == 200:
-                    d = resp.json()
-                    used = d.get("character_count", 0)
-                    limit = d.get("character_limit", 0)
-                    tier = d.get("tier", "creator")
-                    remaining = max(0, limit - used)
-                    pct = (used / limit * 100) if limit > 0 else 0
-
-                    st.markdown(f"**Current Plan**<br><span style='font-size:1.5em; font-weight:bold; color:#1f77b4;'>{tier}</span>", unsafe_allow_html=True)
-                    c1, c2 = st.columns(2)
-                    c1.metric("Characters Used", f"{used:,}")
-                    c2.metric("Remaining", f"{remaining:,}")
-                    st.progress(pct / 100, text=f"{pct:.1f}% of monthly quota used")
-
-                    if pct < 70:
-                        st.success("✅ Good quota balance")
-                    elif pct < 85:
-                        st.warning("⚠️ Quota running low")
-                    else:
-                        st.error("⚠️ Quota almost exhausted")
-            except:
-                pass
-
-            st.divider()
-            st.header("⚙️ Generation Settings")
-            force_fit = st.checkbox("Force segments to fit timing (truncate if needed)", value=True, 
-                                    help="If enabled and even at 2x speed the audio is still too long, the end of the sentence will be cut off.")
-            model_id = st.selectbox("ElevenLabs Model", ["eleven_v3", "eleven_turbo_v2_5"], index=0,
-                                    help="eleven_v3 = highest quality. eleven_turbo_v2_5 = faster and cheaper.")
 
         # UPLOAD + TIP
         col_upload, col_tip = st.columns([3, 2])
@@ -424,10 +431,20 @@ elif st.session_state.selected_tool == "🎙️ Voice Dubbing (ElevenLabs)":
 
     st.caption("Made with ❤️ for faithful content creators • Powered by ElevenLabs + Streamlit")
 
-# ===================== AUDIO TRANSCRIPTION (PLACEHOLDER) =====================
+# ===================== AUDIO TRANSCRIPTION (INÍCIO DA ETAPA 3) =====================
 elif st.session_state.selected_tool == "🎤 Audio Transcription (AssemblyAI)":
+
     st.title("🎤 Audio Transcription - AssemblyAI")
-    st.info("Esta seção será implementada na próxima etapa.")
+
+    tab1, tab2 = st.tabs(["Transcrição Normal", "Transcrição com Diarização"])
+
+    with tab1:
+        st.subheader("Transcrição Normal")
+        st.info("Aqui será implementada a transcrição normal (sem identificação de falantes).")
+
+    with tab2:
+        st.subheader("Transcrição com Diarização")
+        st.info("Aqui será implementada a transcrição com identificação de falantes + mapeamento de nomes.")
 
     if st.button("← Voltar ao Menu Principal"):
         st.session_state.selected_tool = None
