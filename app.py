@@ -434,10 +434,20 @@ elif st.session_state.selected_tool == "🎙️ Voice Dubbing (ElevenLabs)":
 
     st.caption("Made with ❤️ for faithful content creators • Powered by ElevenLabs + Streamlit")
 
-# ===================== AUDIO TRANSCRIPTION (PLACEHOLDER) =====================
+# ===================== AUDIO TRANSCRIPTION =====================
 elif st.session_state.selected_tool == "🎤 Audio Transcription (AssemblyAI)":
+
     st.title("🎤 Audio Transcription - AssemblyAI")
-    st.info("This section will be implemented in the next step (Normal Transcription + Diarization).")
+
+    tab1, tab2 = st.tabs(["Normal Transcription", "Transcription with Diarization"])
+
+    with tab1:
+        st.subheader("Normal Transcription")
+        st.info("This section will be implemented soon (Standard transcription without speaker identification).")
+
+    with tab2:
+        st.subheader("Transcription with Diarization")
+        st.info("This section will be implemented soon (Transcription with speaker identification + name mapping).")
 
     if st.button("← Back to Main Menu"):
         st.session_state.selected_tool = None
