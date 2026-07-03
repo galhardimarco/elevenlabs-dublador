@@ -44,8 +44,16 @@ def remove_from_queue(task_id):
         st.session_state.queue.remove(task_id)
 
 # ===================== PROCESSING =====================
-def generate_tts(text, output_path, voice_id, stability, similarity, model_id):
-    data = {"text": text, "model_id": model_id, "voice_settings": {"stability": stability, "similarity_boost": similarity}}
+def generate_tts(text, output_path, voice_id, stability, similarity, speed, model_id):
+    data = {
+        "text": text,
+        "model_id": model_id,
+        "voice_settings": {
+            "stability": stability,
+            "similarity_boost": similarity,
+            "speed": speed
+        }
+    }
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     resp = requests.post(url, headers=HEADERS, json=data, timeout=90)
     if resp.status_code == 200:
@@ -78,6 +86,7 @@ def process_job(task_id):
     voice_id = job["voice_id"]
     stability = job["stability"]
     similarity = job["similarity"]
+    speed = job["speed"]
     model_id = job["model_id"]
     force_fit = job["force_fit"]
 
@@ -103,7 +112,7 @@ def process_job(task_id):
         progress.progress((idx + 1) / total, text=f"🎤 Processing segment {idx+1}/{total}...")
 
         temp_audio = f"seg_{task_id}_{idx}.mp3"
-        generate_tts(text, temp_audio, voice_id, stability, similarity, model_id)
+        generate_tts(text, temp_audio, voice_id, stability, similarity, speed, model_id)
 
         audio_data, sr = sf.read(temp_audio)
         if audio_data.ndim == 1:
@@ -117,8 +126,8 @@ def process_job(task_id):
 
         speed_used = 1.0
         if original_dur > available * 1.05:
-            speed = original_dur / available
-            speed_used = min(speed, 2.0)
+            speed_calc = original_dur / available
+            speed_used = min(speed_calc, 2.0)
 
             sped_path = f"sped_{task_id}_{idx}.mp3"
             apply_ffmpeg_speed(temp_audio, sped_path, speed_used)
@@ -200,7 +209,7 @@ if st.session_state.selected_country is None:
         st.rerun()
 
 else:
-    # ===================== TELA 2 - UI COMO NA IMAGEM =====================
+    # ===================== TELA 2 =====================
     st.title("🎙️ ElevenLabs SRT Voice Generator")
     st.caption(f"{st.session_state.selected_country} • {st.session_state.selected_voice_name}")
 
@@ -238,28 +247,33 @@ else:
 
         st.divider()
         st.header("⚙️ Generation Settings")
-        force_fit = st.checkbox("Force segments to fit timing (truncate if needed)", value=True, help="If enabled and even at 2x speed the audio is still too long, the end of the sentence will be cut off. Recommended: OFF for Bible teaching content.")
-        model_id = st.selectbox("ElevenLabs Model", ["eleven_v3", "eleven_turbo_v2_5"], index=0, help="eleven_v3 = highest quality. eleven_turbo_v2_5 = faster and cheaper.")
+        force_fit = st.checkbox("Force segments to fit timing (truncate if needed)", value=True, 
+                                help="If enabled and even at 2x speed the audio is still too long, the end of the sentence will be cut off.")
+        model_id = st.selectbox("ElevenLabs Model", ["eleven_v3", "eleven_turbo_v2_5"], index=0,
+                                help="eleven_v3 = highest quality. eleven_turbo_v2_5 = faster and cheaper.")
 
     # UPLOAD + TIP
     col_upload, col_tip = st.columns([3, 2])
     with col_upload:
-        uploaded_file = st.file_uploader("📁 Upload your .srt file", 
-        type=["srt"],
-        help="Upload the subtitle file exported from your video editor or transcription tool."
-        )
+        uploaded_file = st.file_uploader("📁 Upload your .srt file", type=["srt"],
+            help="Upload the subtitle file exported from your video editor or transcription tool.")
     with col_tip:
         st.info("💡 Tip: For best results with Bible teaching videos, use **Stability 0.55-0.65** and **Similarity 0.80-0.90** for consistent, trustworthy narration voice.")
 
-    # VOICE QUALITY SETTINGS
+    # VOICE QUALITY SETTINGS (agora com Speed)
     st.subheader("🎛️ Voice Quality Settings")
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
-        stability = st.slider("Stability", 0.0, 1.0, 0.60, 0.05, help="Higher = more consistent voice (recommended for teaching). Lower = more expressive/emotional.")
+        stability = st.slider("Stability", 0.0, 1.0, 0.60, 0.05, 
+                              help="Higher = more consistent voice (recommended for teaching)")
     with col2:
-        similarity = st.slider("Similarity Boost", 0.0, 1.0, 0.85, 0.05, help="Higher = closer to the original voice timbre. Good for brand consistency.")
+        similarity = st.slider("Similarity Boost", 0.0, 1.0, 0.85, 0.05,
+                               help="Higher = closer to the original voice timbre")
+    with col3:
+        speed = st.slider("Speed", 0.7, 1.2, 1.0, 0.05,
+                          help="Native speed from ElevenLabs. Values > 1.0 = faster, < 1.0 = slower. Sounds more natural than FFmpeg.")
 
-    # SRT PREVIEW (igual ao original)
+    # SRT PREVIEW
     if uploaded_file:
         try:
             tmp = f"preview_{int(time.time())}.srt"
@@ -291,6 +305,7 @@ else:
                 "voice_id": st.session_state.selected_voice_id,
                 "stability": stability,
                 "similarity": similarity,
+                "speed": speed,
                 "model_id": model_id,
                 "force_fit": force_fit,
             }
@@ -375,7 +390,7 @@ else:
         st.markdown("""
         1. Select your voice on the first screen.
         2. Upload your .srt file.
-        3. Adjust Stability and Similarity if needed (defaults are good).
+        3. Adjust **Stability**, **Similarity** and **Speed** if needed.
         4. Click **Generate Dubbed Audio**.
         5. If there is a queue, wait for your turn.
         6. Download the final audio when ready.
