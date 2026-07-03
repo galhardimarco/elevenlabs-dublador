@@ -265,7 +265,7 @@ elif st.session_state.selected_tool == "🎙️ Voice Dubbing (ElevenLabs)":
         st.markdown("### Select your voice / language")
 
         country = st.selectbox("Choose voice", options=list(COUNTRY_VOICES.keys()), index=0)
-        st.info("**Recommended for Brazilian Portuguese content:** Brazil voice")
+    #    st.info("**Recommended for Brazilian Portuguese content:** Brazil voice")
 
         if st.button("Continue →", type="primary", use_container_width=True):
             st.session_state.selected_country = country
