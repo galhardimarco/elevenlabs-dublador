@@ -357,7 +357,7 @@ else:
 
                 if task.get("truncated"):
                     st.write("**Truncated:**", ", ".join([f"{n} (cut {m}ms)" for n, m in task["truncated"]]))
-                    st.error("Segment(s) truncated. Please, condider revising the line(s) in question.")
+                    st.error("Segment(s) truncated. Please, consider revising the line(s) in question.")
                 if task.get("sped_up"):
                     st.write("**Sped up:**", ", ".join([f"{n} ({s:.2f}x)" for n, s in task["sped_up"]]))
                
