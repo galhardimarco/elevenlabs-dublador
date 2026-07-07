@@ -65,8 +65,9 @@ def log_transcription_to_sheets(filename: str, duration_minutes: float, lines_ge
         )
         client = gspread.authorize(creds)
         
-        # Nome da planilha que você criou
-        sheet = client.open("Behold Israel - Transcription Log").sheet1
+        # Abre a planilha pelo nome
+        spreadsheet = client.open("Behold Israel - Transcription Log")
+        sheet = spreadsheet.sheet1
         
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
@@ -80,7 +81,8 @@ def log_transcription_to_sheets(filename: str, duration_minutes: float, lines_ge
         st.caption("📝 Log salvo com sucesso no Google Sheets")
         
     except Exception as e:
-        st.error(f"❌ Erro ao salvar no Google Sheets: {str(e)}")
+        # Mostra o erro real de forma mais clara
+        st.error(f"❌ Erro ao salvar no Google Sheets: {type(e).__name__} - {str(e)}")
 
 # ===================== LOGGING =====================
 def log_transcription(filename: str, duration_minutes: float, lines_generated: int):
