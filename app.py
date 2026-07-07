@@ -544,6 +544,7 @@ elif st.session_state.selected_tool == "🎤 Audio Transcription (AssemblyAI)":
                                     log_transcription(task["filename"], duration_min, len(sentences))
 
                                     st.success("✅ Transcription completed!")
+                                    st.caption("📝 Log salvo com sucesso em transcription_log.txt")
 
                                     st.download_button(
                                         "📥 Download SRT File",
