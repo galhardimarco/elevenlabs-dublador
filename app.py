@@ -9,6 +9,9 @@ import time
 import queue
 import uuid
 from datetime import datetime, timedelta
+import gspread
+from google.oauth2.service_account import Credentials
+from datetime import datetime
 
 st.set_page_config(
     page_title="Behold Israel Translation Team",
@@ -46,6 +49,38 @@ def get_position(task_id):
 def remove_from_queue(task_id):
     if task_id in st.session_state.queue:
         st.session_state.queue.remove(task_id)
+
+# ===================== LOGGING NO GOOGLE SHEETS =====================
+def log_transcription_to_sheets(filename: str, duration_minutes: float, lines_generated: int):
+    """Registra a transcrição no Google Sheets"""
+    try:
+        scope = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        
+        creds = Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"], 
+            scopes=scope
+        )
+        client = gspread.authorize(creds)
+        
+        # Nome da planilha que você criou
+        sheet = client.open("Behold Israel - Transcription Log").sheet1
+        
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        sheet.append_row([
+            timestamp,
+            filename,
+            round(duration_minutes, 1),
+            lines_generated
+        ])
+        
+        st.caption("📝 Log salvo com sucesso no Google Sheets")
+        
+    except Exception as e:
+        st.error(f"❌ Erro ao salvar no Google Sheets: {str(e)}")
 
 # ===================== LOGGING =====================
 def log_transcription(filename: str, duration_minutes: float, lines_generated: int):
@@ -539,9 +574,9 @@ elif st.session_state.selected_tool == "🎤 Audio Transcription (AssemblyAI)":
                                     srt_content = "".join(srt_lines)
                                     srt_filename = task["filename"].rsplit(".", 1)[0] + ".srt"
 
-                                    # === LOG TRANSCRIPTION ===
+                                    # === LOG NO GOOGLE SHEETS ===
                                     duration_min = (transcript.audio_duration or 0) / 1000 / 60
-                                    log_transcription(task["filename"], duration_min, len(sentences))
+                                    log_transcription_to_sheets(task["filename"], duration_min, len(sentences))
 
                                     st.success("✅ Transcription completed!")
                                     
