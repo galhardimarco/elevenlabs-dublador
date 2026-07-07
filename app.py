@@ -577,7 +577,13 @@ elif st.session_state.selected_tool == "🎤 Audio Transcription (AssemblyAI)":
                                     srt_filename = task["filename"].rsplit(".", 1)[0] + ".srt"
 
                                     # === LOG NO GOOGLE SHEETS ===
-                                    duration_min = (transcript.audio_duration or 0) / 1000 / 60
+                                    # Calcula a duração com base na última frase (mais confiável)
+                                    if sentences:
+                                        last_sentence = sentences[-1]
+                                        duration_ms = last_sentence.end
+                                        duration_min = duration_ms / 1000 / 60
+                                    else:
+                                        duration_min = 0
                                     log_transcription_to_sheets(task["filename"], duration_min, len(sentences))
 
                                     st.success("✅ Transcription completed!")
