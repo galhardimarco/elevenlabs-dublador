@@ -49,7 +49,7 @@ def remove_from_queue(task_id):
 
 # ===================== LOGGING =====================
 def log_transcription(filename: str, duration_minutes: float, lines_generated: int):
-    """Log every transcription to a text file"""
+    """Log every transcription to a text file with visible feedback"""
     log_file = "transcription_log.txt"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
@@ -58,9 +58,9 @@ def log_transcription(filename: str, duration_minutes: float, lines_generated: i
     try:
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(log_entry)
+        st.caption("📝 Log salvo com sucesso em `transcription_log.txt`")
     except Exception as e:
-        print(f"[LOG ERROR] {e}")
-
+        st.error(f"❌ Erro ao salvar log: {str(e)}")
 
 # ===================== PROCESSING (ElevenLabs) =====================
 def generate_tts(text, output_path, voice_id, stability, similarity, speed, model_id):
@@ -544,8 +544,7 @@ elif st.session_state.selected_tool == "🎤 Audio Transcription (AssemblyAI)":
                                     log_transcription(task["filename"], duration_min, len(sentences))
 
                                     st.success("✅ Transcription completed!")
-                                    st.caption("📝 Log salvo com sucesso em transcription_log.txt")
-
+                                    
                                     st.download_button(
                                         "📥 Download SRT File",
                                         data=srt_content,
