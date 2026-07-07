@@ -8,7 +8,7 @@ import requests
 import time
 import queue
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 st.set_page_config(
     page_title="Behold Israel Translation Team",
@@ -46,6 +46,21 @@ def get_position(task_id):
 def remove_from_queue(task_id):
     if task_id in st.session_state.queue:
         st.session_state.queue.remove(task_id)
+
+# ===================== LOGGING =====================
+def log_transcription(filename: str, duration_minutes: float, lines_generated: int):
+    """Log every transcription to a text file"""
+    log_file = "transcription_log.txt"
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    log_entry = f"{timestamp} | {filename} | {duration_minutes:.1f} min | {lines_generated} lines\n"
+    
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(log_entry)
+    except Exception as e:
+        print(f"[LOG ERROR] {e}")
+
 
 # ===================== PROCESSING (ElevenLabs) =====================
 def generate_tts(text, output_path, voice_id, stability, similarity, speed, model_id):
@@ -173,6 +188,7 @@ def process_job(task_id):
 
     remove_from_queue(task_id)
 
+
 # ===================== SEGURANÇA =====================
 def check_password():
     if "password_correct" not in st.session_state:
@@ -192,6 +208,7 @@ def check_password():
 if not check_password():
     st.stop()
 
+
 # ===================== ESTADO =====================
 if "selected_tool" not in st.session_state:
     st.session_state.selected_tool = None
@@ -199,6 +216,7 @@ if "my_task_id" not in st.session_state:
     st.session_state.my_task_id = None
 if "selected_country" not in st.session_state:
     st.session_state.selected_country = None
+
 
 # ===================== MENU PRINCIPAL =====================
 if st.session_state.selected_tool is None:
@@ -214,6 +232,7 @@ if st.session_state.selected_tool is None:
     if st.button("Continue →", type="primary", use_container_width=True):
         st.session_state.selected_tool = tool
         st.rerun()
+
 
 # ===================== VOICE DUBBING (ElevenLabs) =====================
 elif st.session_state.selected_tool == "🎙️ Voice Dubbing (ElevenLabs)":
@@ -265,7 +284,6 @@ elif st.session_state.selected_tool == "🎙️ Voice Dubbing (ElevenLabs)":
         st.markdown("### Select your voice / language")
 
         country = st.selectbox("Choose voice", options=list(COUNTRY_VOICES.keys()), index=0)
-    #    st.info("**Recommended for Brazilian Portuguese content:** Brazil voice")
 
         if st.button("Continue →", type="primary", use_container_width=True):
             st.session_state.selected_country = country
@@ -434,6 +452,7 @@ elif st.session_state.selected_tool == "🎙️ Voice Dubbing (ElevenLabs)":
 
     st.caption("Made with ❤️ for faithful content creators • Powered by ElevenLabs + Streamlit")
 
+
 # ===================== AUDIO TRANSCRIPTION =====================
 elif st.session_state.selected_tool == "🎤 Audio Transcription (AssemblyAI)":
 
@@ -481,7 +500,6 @@ elif st.session_state.selected_tool == "🎤 Audio Transcription (AssemblyAI)":
                         st.warning("It's your turn! Transcribing now...")
                         with st.spinner("Transcribing audio with AssemblyAI... Please wait."):
                             try:
-                                # Processamento da transcrição normal
                                 import assemblyai as aai
                                 from datetime import timedelta
 
@@ -520,6 +538,10 @@ elif st.session_state.selected_tool == "🎤 Audio Transcription (AssemblyAI)":
 
                                     srt_content = "".join(srt_lines)
                                     srt_filename = task["filename"].rsplit(".", 1)[0] + ".srt"
+
+                                    # === LOG TRANSCRIPTION ===
+                                    duration_min = (transcript.audio_duration or 0) / 1000 / 60
+                                    log_transcription(task["filename"], duration_min, len(sentences))
 
                                     st.success("✅ Transcription completed!")
 
