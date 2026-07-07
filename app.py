@@ -66,7 +66,7 @@ def log_transcription_to_sheets(filename: str, duration_minutes: float, lines_ge
         client = gspread.authorize(creds)
         
         # Abre a planilha pelo nome
-        spreadsheet = client.open("Behold Israel - Transcription Log")
+        spreadsheet = client.open("BI_Uso_Transcript_SRT")
         sheet = spreadsheet.sheet1
         
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -78,7 +78,7 @@ def log_transcription_to_sheets(filename: str, duration_minutes: float, lines_ge
             lines_generated
         ])
         
-        st.caption("📝 Log salvo com sucesso no Google Sheets")
+        st.caption("📝 Log saved in Google Sheets")
         
     except Exception as e:
         # Mostra o erro real de forma mais clara
@@ -591,18 +591,6 @@ elif st.session_state.selected_tool == "🎤 Audio Transcription (AssemblyAI)":
                                         type="primary"
                                     )
                 
-                                    # === DEBUG: Mostrar conteúdo do log ===
-                                    try:
-                                        with open("transcription_log.txt", "r", encoding="utf-8") as f:
-                                            log_content = f.read()
-                                        if log_content.strip():
-                                            with st.expander("📜 Ver log de transcrições"):
-                                                st.code(log_content, language="text")
-                                        else:
-                                            st.warning("Arquivo de log existe, mas está vazio.")
-                                    except FileNotFoundError:
-                                        st.error("Arquivo transcription_log.txt ainda não foi criado.")
-
                                     # Limpar task
                                     if task_id in st.session_state.tasks:
                                         del st.session_state.tasks[task_id]
