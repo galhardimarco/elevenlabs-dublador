@@ -395,6 +395,22 @@ elif st.session_state.selected_tool == "🎙️ Voice Dubbing (ElevenLabs)":
                             mime="audio/mpeg",
                             use_container_width=True,
                             type="primary"
+            #
+                        # === DEBUG: Mostrar conteúdo do log ===
+try:
+    with open("transcription_log.txt", "r", encoding="utf-8") as f:
+        log_content = f.read()
+    if log_content.strip():
+        with st.expander("📜 Ver log de transcrições"):
+            st.code(log_content, language="text")
+    else:
+        st.warning("Arquivo de log existe, mas está vazio.")
+except FileNotFoundError:
+    st.error("Arquivo transcription_log.txt ainda não foi criado.")
+
+
+            #
+                            
                         )
 
                 with st.expander("📋 Processing Summary", expanded=True):
