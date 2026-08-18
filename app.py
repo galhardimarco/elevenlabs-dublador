@@ -25,7 +25,7 @@ HEADERS = {"xi-api-key": API_KEY, "Content-Type": "application/json"}
 
 COUNTRY_VOICES = {
     "Brazil 🇧🇷": {"name": "Brazil Estive New", "id": "YU8EsJtXFMyKMxYtheDk"},
-    "Romaniam RO": {"name": "Mihai", "id": "Apdg3oD0TdIJPcGBCJwU"},
+    "Romanian RO": {"name": "Mihai", "id": "Apdg3oD0TdIJPcGBCJwU"},
     "Korea 🇰🇷": {"name": "Korean Young Gyu", "id": "h5eZa8VFAq0EQ8E81dfL"},
     "Japanese 🇯🇵": {"name": "Japanese Otani", "id": "3JDquces8E8bkmvbh6Bc"},
     "Filipino 🇵🇭": {"name": "Filipino Pocholo Gonzales", "id": "VCGhAh0uUPumdTXQNdzQ"},
