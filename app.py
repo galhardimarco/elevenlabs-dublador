@@ -548,7 +548,7 @@ elif st.session_state.selected_tool == "🎤 Audio Transcription (AssemblyAI)":
                                     f.write(task["file_bytes"])
 
                                 config = aai.TranscriptionConfig(
-                                    speech_models=["universal-3-pro", "universal-2"],
+                                    speech_models=["universal-3-5-pro", "universal-2"],
                                     language_detection=True,
                                 )
 
